@@ -17,7 +17,10 @@ const EnvSchema = z.object({
   POLL_MS: z.coerce.number().int().min(250).default(1000),
   KEEP_ALIVE_MS: z.coerce.number().int().min(1000).default(5000),
   SESSION_SECRET: z.string().min(16).default("dev-only-insecure-secret-change-me-now"),
+  // Either a precomputed scrypt hash, OR a plaintext password (hashed at startup).
+  // POOL_PASSWORD takes precedence — handy because a 161-char hash is easy to truncate.
   POOL_PASSWORD_HASH: z.string().optional(),
+  POOL_PASSWORD: z.string().optional(),
   CORS_ORIGIN: z.string().optional(),
   // Set to ".mght630.com" in prod so the session cookie is shared between
   // pool.mght630.com (web) and poolapi.mght630.com (api). Unset in dev (host-only).

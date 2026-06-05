@@ -5,7 +5,7 @@ import {
   COOKIE_NAME,
   REMEMBER_TTL_MS,
   SESSION_TTL_MS,
-  verifyPassword,
+  checkPassword,
   createSessionToken,
   verifySessionToken,
   rateLimitOk,
@@ -42,7 +42,7 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
     if (!rateLimitOk(req.ip)) return reply.code(429).send({ error: "too many attempts" });
     const body = LoginRequest.safeParse(req.body);
     if (!body.success) return reply.code(400).send({ error: "invalid request" });
-    if (!config.POOL_PASSWORD_HASH || !verifyPassword(body.data.password, config.POOL_PASSWORD_HASH)) {
+    if (!checkPassword(body.data.password)) {
       return reply.code(401).send({ error: "invalid credentials" });
     }
     resetRateLimit(req.ip);

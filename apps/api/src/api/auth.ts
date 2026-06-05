@@ -63,3 +63,17 @@ export function rateLimitOk(ip: string): boolean {
 export function resetRateLimit(ip: string): void {
   attempts.delete(ip);
 }
+
+// Resolve the effective password hash once. A plaintext POOL_PASSWORD (hashed
+// here) takes precedence over POOL_PASSWORD_HASH.
+const effectiveHash: string | undefined = config.POOL_PASSWORD
+  ? hashPassword(config.POOL_PASSWORD)
+  : config.POOL_PASSWORD_HASH;
+
+export function isPasswordConfigured(): boolean {
+  return Boolean(effectiveHash);
+}
+
+export function checkPassword(password: string): boolean {
+  return effectiveHash ? verifyPassword(password, effectiveHash) : false;
+}

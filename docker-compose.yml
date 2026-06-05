@@ -32,7 +32,7 @@ services:
       POLL_MS: 1000
       KEEP_ALIVE_MS: ${KEEP_ALIVE_MS:-5000}
       SESSION_SECRET: ${SESSION_SECRET}
-      POOL_PASSWORD_HASH: ${POOL_PASSWORD_HASH}
+      POOL_PASSWORD: ${POOL_PASSWORD}
       COOKIE_DOMAIN: .mght630.com
       CORS_ORIGIN: https://pool.mght630.com
     networks: [coolify]
