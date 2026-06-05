@@ -10,7 +10,7 @@ RUN pnpm install --frozen-lockfile --prod=false
 RUN pnpm --filter @pool/protocol build \
  && pnpm --filter @pool/types build \
  && pnpm --filter @pool/api build
-RUN pnpm --filter @pool/api deploy --prod --legacy /app
+RUN pnpm --filter @pool/api deploy --prod /app
 
 FROM node:22-alpine AS runner
 WORKDIR /app
