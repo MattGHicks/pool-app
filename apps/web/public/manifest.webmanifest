@@ -1,0 +1,13 @@
+{
+  "name": "PoolPilot",
+  "short_name": "PoolPilot",
+  "description": "Control and monitor the pool pump",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#05090e",
+  "theme_color": "#05090e",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
