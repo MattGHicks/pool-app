@@ -14,16 +14,23 @@ pnpm --filter @pool/api hash-password 'YOUR-LOGIN-PASSWORD'   # POOL_PASSWORD_HA
 
 Keep these for the next step. The login password is what you'll type into the app.
 
-## 1. Free the bus — retire njsPC (on the T630)
+## 1. Free the bus — retire njsPC AND dashPanel (on the T630)
 
-The new `pool-api` must be the only writer on `192.168.4.60:8899`.
+The new `pool-api` must be the only writer on `192.168.4.60:8899`. Both old containers
+(`njspc` → `pool.mght630.com`, `njspc-dash` → `dash.mght630.com`) live in the same compose
+file, so one `down` retires both — Traefik then drops both routes automatically.
 
 ```bash
 ssh matt@100.85.179.110 'cd ~/pool-controller/njspc && docker compose down'
+# confirm both are gone:
+ssh matt@100.85.179.110 'docker ps --format "{{.Names}}" | grep -i njspc || echo "njspc + dashPanel removed"'
 ```
 
-(Leave the bridge powered. This just stops njsPC + dashPanel so the bus and the
-`pool.mght630.com` route are free.)
+After this, `dash.mght630.com` stops responding (retired for good). `pool.mght630.com` is freed
+for the new web app, and the RS-485 bus is free. (Leave the bridge powered.)
+
+To also delete the old njsPC config volume later (optional, after you're happy with PoolPilot):
+`docker volume rm njspc_njspc-data` and `rm -rf ~/pool-controller/njspc`.
 
 ## 2A. Deploy via Coolify (recommended)
 
