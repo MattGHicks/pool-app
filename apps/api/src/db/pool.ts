@@ -6,14 +6,26 @@ let pool: pg.Pool | null = null;
 let connected = false;
 
 export function getPool(): pg.Pool | null {
-  if (!config.DATABASE_URL) return null;
-  if (!pool) {
-    pool = new pg.Pool({ connectionString: config.DATABASE_URL, max: 8 });
-    pool.on("error", (err: Error) => {
-      connected = false;
-      logger.warn({ err: err.message }, "pg pool error");
+  if (pool) return pool;
+  // Prefer discrete params (passwords with '/' etc. work without URL-encoding).
+  if (config.DB_HOST) {
+    pool = new pg.Pool({
+      host: config.DB_HOST,
+      port: config.DB_PORT,
+      user: config.DB_USER,
+      password: config.DB_PASSWORD,
+      database: config.DB_NAME,
+      max: 8,
     });
+  } else if (config.DATABASE_URL) {
+    pool = new pg.Pool({ connectionString: config.DATABASE_URL, max: 8 });
+  } else {
+    return null;
   }
+  pool.on("error", (err: Error) => {
+    connected = false;
+    logger.warn({ err: err.message }, "pg pool error");
+  });
   return pool;
 }
 

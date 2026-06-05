@@ -24,7 +24,11 @@ services:
       BRIDGE_HOST: 192.168.4.60
       BRIDGE_PORT: 8899
       PUMP_ADDRESS: 96
-      DATABASE_URL: postgres://pool:${DB_PASSWORD}@pool-db:5432/pool
+      DB_HOST: pool-db
+      DB_PORT: 5432
+      DB_USER: pool
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: pool
       POLL_MS: 1000
       KEEP_ALIVE_MS: ${KEEP_ALIVE_MS:-5000}
       SESSION_SECRET: ${SESSION_SECRET}

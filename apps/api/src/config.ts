@@ -6,7 +6,14 @@ const EnvSchema = z.object({
   BRIDGE_HOST: z.string().default("192.168.4.60"),
   BRIDGE_PORT: z.coerce.number().int().default(8899),
   PUMP_ADDRESS: z.coerce.number().int().default(96), // 0x60
+  // DB connection: either a full DATABASE_URL, or discrete parts (preferred in
+  // prod so passwords with URL-special chars like '/' work without encoding).
   DATABASE_URL: z.string().optional(),
+  DB_HOST: z.string().optional(),
+  DB_PORT: z.coerce.number().int().default(5432),
+  DB_USER: z.string().default("pool"),
+  DB_PASSWORD: z.string().optional(),
+  DB_NAME: z.string().default("pool"),
   POLL_MS: z.coerce.number().int().min(250).default(1000),
   KEEP_ALIVE_MS: z.coerce.number().int().min(1000).default(5000),
   SESSION_SECRET: z.string().min(16).default("dev-only-insecure-secret-change-me-now"),
