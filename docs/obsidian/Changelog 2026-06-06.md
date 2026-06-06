@@ -43,6 +43,11 @@ See [[Redeploy Problem & Fixes]] for the why behind #2/#3/#4, and [[Deployment &
 - **Cause:** backend `Scheduler` only reloaded schedules from the DB at startup/edit; the 30 s tick recomputed from a *cached* list that had gone stale.
 - **Fix:** scheduler now reloads from the DB every 30 s (self-heals). Plus `ActiveScheduleCard` now respects `daysOfWeek` ("Off today" instead of a false "Running now"). See [[Known Issues]].
 
+## Final verification + physical install (2026-06-06)
+- ESP32 bridge **relocated into its 3D-printed box**. The move shows in the guardian log as `EHOSTUNREACH` for ~75 s, then a clean reconnect — during the outage the pump safely rode its **onboard schedule**, then the app retook control. Failsafe confirmed once more, for real.
+- **Full health sweep passed:** all four containers `Up`; `pool-guardian` at 3 h uptime (untouched by every app redeploy — independent-deploy design working); `/healthz` `busConnected:true`, `controlMode:schedule`, `lastPollAgeMs ~1 s`; pool-api `bridge connected { host: 'pool-guardian' }` (cutover intact); a redeploy held the pump at **1500 rpm** seamlessly; schedule driving the pump; no errors.
+- **State: done.** Only open thread is the ~15-min ESP32 reset (cosmetic; watch whether the new box position changes its frequency) — see [[Known Issues]].
+
 ## Loose threads → see [[Known Issues]]
 - ESP32 ~15‑min reset (root cause on the bridge side — open).
 - GHCR token rotation (re-run `docker login` if rotated).

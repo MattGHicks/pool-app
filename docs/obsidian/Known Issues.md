@@ -39,6 +39,9 @@ Low today. The one real risk: if a drop ever **exceeds ~15 s**, the pump would b
 ### Mitigation shipped (cosmetic)
 Homepage **Status** card now debounces the fault: a non-zero `statusWord` must persist for **3 consecutive polls** before it shows red, and clears on the first healthy frame (`useStablePumpStatus` in `apps/web/src/app/page.tsx`). So the transient no longer flashes. The momentary RPM wiggle is left honest (debouncing a live gauge would make real speed changes feel laggy).
 
+### Watch after the 2026-06-06 relocation
+The bridge was moved into a 3D-printed box on 2026-06-06. Early signs are fine (a post-move reset recovered in ~1 s). Keep a loose eye on whether the new position changes the reset frequency or recovery time (WiFi signal). If it gets worse, that's a strong hint the root is WiFi/signal rather than a firmware timer.
+
 ### Next steps (when picked up)
 - [ ] Identify what's on the ESP32's 15-min timer. **Need to know the firmware** (ESPHome? custom Arduino sketch? esp-link/ser2net?).
 - [ ] Check the router for a ~15-min DHCP lease on `192.168.4.60`; consider a static lease.

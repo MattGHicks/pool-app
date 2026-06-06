@@ -36,5 +36,7 @@ Replaces nodejs‑poolController. Mobile‑first dashboard, scheduling, energy a
 | Pump revert timeout | ~15 s (≈ 3 × keep-alive) |
 | Guardian failover ceiling | 5 min (`FAILOVER_MAX_MS=300000`) |
 
-> [!success] Status as of 2026-06-06
-> Guardian is live in front of the ESP32 and **proven in production**: a real merge→redeploy took pool-api down **38 s** and the pump held steady at 1500 rpm — no stop, no `SEr`.
+> [!success] Status — SHIPPED & VERIFIED (2026-06-06)
+> Production, live, and healthy. Guardian is in front of the ESP32 and **proven**: a real merge→redeploy took pool-api down ~38 s and the pump held at 1500 rpm — no stop, no `SEr`. Cutover intact (`pool-api → pool-guardian → ESP32`), schedule driving the pump, self-healing scheduler live. The ESP32 bridge is now relocated into its 3D-printed box; a full health sweep passed (all four containers up, guardian untouched across redeploys, the relocation's ~75 s bridge outage safely fell back to the onboard schedule and recovered).
+>
+> **Only open thread:** the ~15-min ESP32 link reset — cosmetic (1–8 s recovery), see [[Known Issues]].
