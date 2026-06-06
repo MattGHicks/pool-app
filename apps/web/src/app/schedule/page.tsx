@@ -1,36 +1,64 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
-import { Card, SectionTitle } from "@/components/ui";
+import { useEffect, useRef, useState } from "react";
+import { Card } from "@/components/ui";
 import { ScheduleTimeline } from "@/components/ScheduleTimeline";
+import { TimelineEditor } from "@/components/TimelineEditor";
 import { api } from "@/lib/api";
-import { sortSegments, runtimeHours, fromMin, toMin, label12, rpmColor } from "@/lib/schedule";
+import { runtimeHours } from "@/lib/schedule";
 import { haptics } from "@/lib/haptics";
-import type { Schedule, ScheduleSegment } from "@pool/types";
+import type { Schedule, ScheduleSegment, ScheduleInput } from "@pool/types";
 
-const DEFAULT_SEGS: ScheduleSegment[] = [
-  { start: "08:00", rpm: 1500 },
-  { start: "12:00", rpm: 2400 },
-  { start: "16:00", rpm: 1500 },
-  { start: "20:00", rpm: 0 },
+const STARTERS: ScheduleInput[] = [
+  {
+    name: "Daily",
+    enabled: true,
+    segments: [
+      { start: "00:00", rpm: 0 },
+      { start: "08:00", rpm: 1500 },
+      { start: "18:00", rpm: 0 },
+    ],
+    daysOfWeek: [0, 1, 2, 3, 4, 5, 6],
+    priority: 0,
+  },
+  {
+    name: "Deep clean",
+    enabled: false,
+    segments: [
+      { start: "00:00", rpm: 0 },
+      { start: "08:00", rpm: 1500 },
+      { start: "11:00", rpm: 2400 },
+      { start: "14:00", rpm: 1500 },
+      { start: "19:00", rpm: 0 },
+    ],
+    daysOfWeek: [0, 1, 2, 3, 4, 5, 6],
+    priority: 0,
+  },
+  {
+    name: "Vacation",
+    enabled: false,
+    segments: [
+      { start: "00:00", rpm: 0 },
+      { start: "10:00", rpm: 1500 },
+      { start: "16:00", rpm: 0 },
+    ],
+    daysOfWeek: [0, 1, 2, 3, 4, 5, 6],
+    priority: 0,
+  },
 ];
 
-const RPM_CHIPS = [
-  { rpm: 0, label: "Off" },
-  { rpm: 1500, label: "Eco" },
-  { rpm: 2400, label: "Clean" },
-  { rpm: 3000, label: "Boost" },
-];
+const DEFAULT_SEGS: ScheduleSegment[] = STARTERS[0]!.segments;
 
 export default function SchedulePage() {
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [name, setName] = useState("My schedule");
+  const [name, setName] = useState("Daily");
   const [segs, setSegs] = useState<ScheduleSegment[]>(DEFAULT_SEGS);
   const [busy, setBusy] = useState(false);
   const [now, setNow] = useState(0);
+  const seeded = useRef(false);
 
   const selected = schedules.find((s) => s.id === selectedId) ?? null;
-  const sorted = useMemo(() => sortSegments(segs), [segs]);
+  const isActive = selected?.enabled ?? false;
   const hours = runtimeHours(segs);
 
   useEffect(() => {
@@ -44,25 +72,31 @@ export default function SchedulePage() {
   }, []);
 
   const load = async (preferId?: string): Promise<void> => {
+    let list: Schedule[];
     try {
-      const list = await api.schedules();
-      setSchedules(list);
-      const pick =
-        (preferId ? list.find((s) => s.id === preferId) : undefined) ??
-        list.find((s) => s.enabled) ??
-        list[0] ??
-        null;
-      if (pick) {
-        setSelectedId(pick.id);
-        setName(pick.name);
-        setSegs(pick.segments);
-      } else {
-        setSelectedId(null);
-        setName("My schedule");
-        setSegs(DEFAULT_SEGS);
-      }
+      list = await api.schedules();
     } catch {
-      /* offline / demo */
+      return;
+    }
+    if (list.length === 0 && !seeded.current) {
+      seeded.current = true;
+      try {
+        for (const s of STARTERS) await api.createSchedule(s);
+        list = await api.schedules();
+      } catch {
+        /* offline */
+      }
+    }
+    setSchedules(list);
+    const pick =
+      (preferId ? list.find((s) => s.id === preferId) : undefined) ??
+      list.find((s) => s.enabled) ??
+      list[0] ??
+      null;
+    if (pick) {
+      setSelectedId(pick.id);
+      setName(pick.name);
+      setSegs(pick.segments);
     }
   };
   useEffect(() => {
@@ -81,25 +115,14 @@ export default function SchedulePage() {
     setName("New schedule");
     setSegs(DEFAULT_SEGS);
   };
-  const setRpm = (i: number, rpm: number): void =>
-    setSegs((p) => p.map((s, j) => (j === i ? { ...s, rpm: Math.max(0, Math.min(3450, rpm)) } : s)));
-  const setTime = (i: number, start: string): void =>
-    setSegs((p) => p.map((s, j) => (j === i ? { ...s, start } : s)));
-  const addSeg = (): void => {
-    haptics.toggle();
-    const last = sortSegments(segs).at(-1);
-    const next = last ? Math.min(1410, toMin(last.start) + 120) : 480;
-    setSegs((p) => [...p, { start: fromMin(next), rpm: 1500 }]);
-  };
-  const removeSeg = (i: number): void => setSegs((p) => (p.length > 1 ? p.filter((_, j) => j !== i) : p));
 
   const save = async (): Promise<void> => {
     setBusy(true);
     haptics.apply();
-    const input = {
+    const input: ScheduleInput = {
       name: name.trim() || "Schedule",
       enabled: selected?.enabled ?? schedules.length === 0,
-      segments: sortSegments(segs),
+      segments: segs,
       daysOfWeek: [0, 1, 2, 3, 4, 5, 6],
       priority: selected?.priority ?? 0,
     };
@@ -112,12 +135,13 @@ export default function SchedulePage() {
     }
     setBusy(false);
   };
-  const activate = async (id: string): Promise<void> => {
+  const activate = async (): Promise<void> => {
+    if (!selectedId) return;
     haptics.toggle();
     setBusy(true);
     try {
-      await api.activateSchedule(id);
-      await load(id);
+      await api.activateSchedule(selectedId);
+      await load(selectedId);
     } catch {
       /* offline */
     }
@@ -139,173 +163,101 @@ export default function SchedulePage() {
     setBusy(false);
   };
 
-  const isActive = selected?.enabled ?? false;
-
   return (
-    <div className="space-y-5 pt-2">
-      {/* Saved schedules */}
-      <div className="flex items-center justify-between">
-        <SectionTitle>Schedules</SectionTitle>
+    <div className="space-y-5 pt-1">
+      <div className="flex items-end justify-between">
+        <div>
+          <h1 className="font-display text-xl tracking-tight text-text">Schedules</h1>
+          <p className="font-mono text-[0.6rem] text-text-faint">
+            drag the handles · tap a block to set speed
+          </p>
+        </div>
         <button
           onClick={startNew}
-          className="rounded-lg border border-border bg-surface/50 px-2.5 py-1 text-[0.7rem] text-aqua active:bg-surface-2/60"
+          className="rounded-lg border border-aqua/50 bg-aqua/10 px-3 py-1.5 text-[0.72rem] font-medium text-aqua active:bg-aqua/20"
         >
           + New
         </button>
       </div>
-      <div className="grid gap-2.5">
+
+      {/* Saved schedules */}
+      <div className="-mx-4 flex gap-2.5 overflow-x-auto px-4 pb-1">
         {schedules.map((s) => {
           const sel = s.id === selectedId;
           return (
             <button
               key={s.id}
               onClick={() => pick(s)}
-              className={`rounded-2xl border p-3 text-left transition active:scale-[0.99] ${
-                sel ? "border-aqua/60 bg-aqua/5" : "border-border bg-surface/40"
+              className={`w-[200px] shrink-0 rounded-2xl border p-3 text-left transition ${
+                sel
+                  ? "border-aqua/70 bg-aqua/[0.07] shadow-[0_0_22px_-6px_var(--color-aqua)]"
+                  : "border-border bg-surface/40"
               }`}
             >
               <div className="mb-2 flex items-center justify-between">
-                <span className="flex items-center gap-2 font-display text-sm">
-                  {s.enabled ? (
-                    <span className="h-1.5 w-1.5 rounded-full bg-aqua shadow-[0_0_7px_var(--color-aqua)]" />
-                  ) : (
-                    <span className="h-1.5 w-1.5 rounded-full bg-border-bright" />
-                  )}
-                  {s.name}
-                </span>
-                <span className="font-mono text-[0.58rem] text-text-faint">
-                  {s.enabled ? "ACTIVE" : `${runtimeHours(s.segments).toFixed(1)}h`}
-                </span>
+                <span className="truncate font-display text-sm">{s.name}</span>
+                {s.enabled ? (
+                  <span className="rounded-full bg-aqua/15 px-1.5 py-0.5 font-mono text-[0.5rem] tracking-wide text-aqua">
+                    ACTIVE
+                  </span>
+                ) : (
+                  <span className="font-mono text-[0.56rem] text-text-faint">
+                    {runtimeHours(s.segments).toFixed(1)}h
+                  </span>
+                )}
               </div>
-              <ScheduleTimeline segments={s.segments} height={26} />
+              <ScheduleTimeline segments={s.segments} height={30} />
             </button>
           );
         })}
-        {schedules.length === 0 ? (
-          <Card className="p-4 text-[0.76rem] text-text-faint">
-            No saved schedules yet. Edit the plan below and tap Save to create your first.
-          </Card>
-        ) : null}
       </div>
 
       {/* Editor */}
-      <SectionTitle>{selectedId ? "Edit schedule" : "New schedule"}</SectionTitle>
-      <Card className="space-y-3 p-4">
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Schedule name"
-          className="w-full rounded-lg border border-border bg-surface/60 px-3 py-2 font-display text-sm text-text outline-none focus:border-aqua/60"
-        />
-        <ScheduleTimeline segments={segs} nowMinutes={now} height={48} />
-        <div className="flex items-center justify-between font-mono text-[0.62rem] text-text-faint">
-          <span>{sorted.length} segments</span>
-          <span>{hours.toFixed(1)} h/day runtime</span>
+      <Card className="space-y-4 border-border-bright/50 p-4">
+        <div className="flex items-center justify-between gap-3">
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Schedule name"
+            className="min-w-0 flex-1 border-b border-transparent bg-transparent pb-1 font-display text-lg text-text outline-none focus:border-aqua/50"
+          />
+          <span className="shrink-0 font-mono text-[0.62rem] text-text-faint">{hours.toFixed(1)} h/day</span>
         </div>
-      </Card>
 
-      {/* Segments */}
-      <SectionTitle>Segments</SectionTitle>
-      <Card className="divide-y divide-border">
-        {sorted.map((s, i) => {
-          const idx = segs.indexOf(s);
-          return (
-            <div key={i} className="space-y-2 px-3 py-3">
-              <div className="flex items-center gap-2">
-                <span
-                  className="h-3 w-3 shrink-0 rounded-full"
-                  style={{ background: rpmColor(s.rpm) }}
-                />
-                <input
-                  type="time"
-                  value={s.start}
-                  onChange={(e) => setTime(idx, e.target.value)}
-                  className="rounded-lg border border-border bg-surface/60 px-2 py-1.5 font-mono text-sm text-text outline-none focus:border-aqua/60"
-                />
-                <span className="font-mono text-[0.6rem] text-text-faint">{label12(s.start)}</span>
-                <div className="flex-1" />
-                <input
-                  type="number"
-                  min={0}
-                  max={3450}
-                  step={50}
-                  value={s.rpm}
-                  onChange={(e) => setRpm(idx, Number(e.target.value))}
-                  className="w-[4.5rem] rounded-lg border border-border bg-surface/60 px-2 py-1.5 text-right font-mono text-sm text-text outline-none focus:border-aqua/60"
-                />
-                <button
-                  onClick={() => removeSeg(idx)}
-                  aria-label="Remove segment"
-                  className="grid h-7 w-7 place-items-center rounded-lg text-text-faint active:bg-surface-2/60"
-                >
-                  ✕
-                </button>
-              </div>
-              <div className="flex gap-1.5 pl-5">
-                {RPM_CHIPS.map((c) => (
-                  <button
-                    key={c.rpm}
-                    onClick={() => setRpm(idx, c.rpm)}
-                    className={`rounded-md border px-2 py-0.5 font-mono text-[0.58rem] transition ${
-                      s.rpm === c.rpm
-                        ? "border-aqua/60 bg-aqua/10 text-aqua"
-                        : "border-border bg-surface/40 text-text-faint active:bg-surface-2/60"
-                    }`}
-                  >
-                    {c.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          );
-        })}
-        <button
-          onClick={addSeg}
-          className="w-full px-3 py-3 text-left text-[0.8rem] text-aqua active:bg-surface-2/40"
-        >
-          + Add segment
-        </button>
+        <TimelineEditor segments={segs} onChange={setSegs} nowMinutes={now} />
       </Card>
 
       {/* Actions */}
-      <div className="grid grid-cols-2 gap-2.5 pb-2">
-        <button
-          onClick={() => void save()}
-          disabled={busy}
-          className="rounded-xl border border-aqua/60 bg-aqua/10 px-3 py-3 text-sm text-aqua transition active:bg-aqua/20 disabled:opacity-50"
-        >
-          {selectedId ? "Save changes" : "Create schedule"}
-        </button>
-        {selectedId && !isActive ? (
+      <div className="space-y-2.5 pb-2">
+        <div className="grid grid-cols-2 gap-2.5">
           <button
-            onClick={() => void activate(selectedId)}
+            onClick={() => void save()}
             disabled={busy}
-            className="rounded-xl border border-border bg-surface/50 px-3 py-3 text-sm text-text transition active:bg-surface-2/60 disabled:opacity-50"
+            className="rounded-xl border border-aqua/60 bg-aqua/10 py-3 text-sm font-medium text-aqua transition active:bg-aqua/20 disabled:opacity-50"
           >
-            Set active
+            {selectedId ? "Save changes" : "Create schedule"}
           </button>
-        ) : (
+          <button
+            onClick={() => void activate()}
+            disabled={busy || !selectedId || isActive}
+            className="rounded-xl border border-border bg-surface/50 py-3 text-sm text-text transition active:bg-surface-2/60 disabled:opacity-40"
+          >
+            {isActive ? "✓ Active" : "Set active"}
+          </button>
+        </div>
+        {selectedId ? (
           <button
             onClick={() => void remove()}
             disabled={busy}
-            className="rounded-xl border border-coral/40 bg-coral/5 px-3 py-3 text-sm text-coral transition active:bg-coral/10 disabled:opacity-50"
+            className="w-full py-2 text-center text-[0.74rem] text-coral/80 active:text-coral"
           >
-            {selectedId ? "Delete" : "Reset"}
+            Delete this schedule
           </button>
-        )}
+        ) : null}
       </div>
-      {selectedId && !isActive ? (
-        <button
-          onClick={() => void remove()}
-          disabled={busy}
-          className="w-full pb-3 text-center text-[0.72rem] text-coral/80 active:text-coral"
-        >
-          Delete this schedule
-        </button>
-      ) : null}
 
-      <p className="pb-2 text-[0.7rem] leading-relaxed text-text-faint">
-        The <span className="text-text">active</span> schedule drives the pump whenever you tap{" "}
+      <p className="pb-2 text-[0.72rem] leading-relaxed text-text-faint">
+        The <span className="text-aqua">active</span> schedule runs whenever you tap{" "}
         <span className="text-aqua">Schedule</span> on the home screen. If the app ever goes offline, the
         pump reverts to its onboard program on its own.
       </p>
