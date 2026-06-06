@@ -1,8 +1,8 @@
 name: Deploy to Coolify
 
 # Coolify is private (LAN/Tailscale only — public requests get 403 by design).
-# So the runner joins the tailnet, then calls Coolify's deploy API on the T630's
-# Tailscale IP. Fires on every push to main.
+# The runner joins the tailnet via the official installer, then calls Coolify's
+# deploy API on the T630's Tailscale IP. Fires on every push to main.
 on:
   push:
     branches: [main]
@@ -12,11 +12,11 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Connect to Tailscale
-        uses: tailscale/github-action@v2
-        with:
-          authkey: ${{ secrets.TS_AUTHKEY }}
-          version: latest
+      - name: Install & connect Tailscale
+        run: |
+          curl -fsSL https://tailscale.com/install.sh | sh
+          sudo tailscale up --authkey="${{ secrets.TS_AUTHKEY }}" --hostname=gh-ci-pool-app --accept-routes
+          tailscale status || true
 
       - name: Trigger Coolify deployment
         run: |
