@@ -7,9 +7,11 @@ import { sortSegments, runtimeHours, label12, rpmColor } from "@/lib/schedule";
 import { haptics } from "@/lib/haptics";
 import type { Schedule, ScheduleSegment, ScheduleInput } from "@pool/types";
 
+const SEED_FLAG = "poolpilot.presets.seeded.v1";
+
 const STARTERS: ScheduleInput[] = [
   {
-    name: "Daily",
+    name: "Maintenance",
     enabled: true,
     segments: [
       { start: "00:00", rpm: 0 },
@@ -20,14 +22,14 @@ const STARTERS: ScheduleInput[] = [
     priority: 0,
   },
   {
-    name: "Deep clean",
+    name: "Active",
     enabled: false,
     segments: [
       { start: "00:00", rpm: 0 },
       { start: "08:00", rpm: 1500 },
-      { start: "11:00", rpm: 2400 },
+      { start: "12:00", rpm: 2400 },
       { start: "14:00", rpm: 1500 },
-      { start: "19:00", rpm: 0 },
+      { start: "18:00", rpm: 0 },
     ],
     daysOfWeek: [0, 1, 2, 3, 4, 5, 6],
     priority: 0,
@@ -37,8 +39,8 @@ const STARTERS: ScheduleInput[] = [
     enabled: false,
     segments: [
       { start: "00:00", rpm: 0 },
-      { start: "10:00", rpm: 1500 },
-      { start: "16:00", rpm: 0 },
+      { start: "09:00", rpm: 1500 },
+      { start: "17:00", rpm: 0 },
     ],
     daysOfWeek: [0, 1, 2, 3, 4, 5, 6],
     priority: 0,
@@ -56,7 +58,7 @@ const CHIPS = [
 export default function SchedulePage() {
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [name, setName] = useState("Daily");
+  const [name, setName] = useState("Maintenance");
   const [segs, setSegs] = useState<ScheduleSegment[]>(DEFAULT_SEGS);
   const [busy, setBusy] = useState(false);
   const [now, setNow] = useState(0);
@@ -83,11 +85,22 @@ export default function SchedulePage() {
     } catch {
       return;
     }
-    if (list.length === 0 && !seeded.current) {
+    // One-time: make sure the default presets exist (even if the DB already has
+    // other schedules). Guarded by a localStorage flag so deletes stick after.
+    const alreadySeeded =
+      typeof window !== "undefined" && window.localStorage.getItem(SEED_FLAG);
+    if (!alreadySeeded && !seeded.current) {
       seeded.current = true;
       try {
-        for (const s of STARTERS) await api.createSchedule(s);
-        list = await api.schedules();
+        const have = new Set(list.map((s) => s.name.toLowerCase()));
+        const missing = STARTERS.filter((s) => !have.has(s.name.toLowerCase()));
+        for (const s of missing) {
+          // Empty DB → keep the starter's own enabled flag; otherwise add it
+          // disabled so we never steal "active" from an existing schedule.
+          await api.createSchedule(list.length === 0 ? s : { ...s, enabled: false });
+        }
+        if (missing.length > 0) list = await api.schedules();
+        if (typeof window !== "undefined") window.localStorage.setItem(SEED_FLAG, "1");
       } catch {
         /* offline */
       }
