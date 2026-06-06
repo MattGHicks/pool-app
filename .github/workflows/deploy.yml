@@ -1,0 +1,18 @@
+name: Deploy to Coolify
+
+# Bypasses the (currently broken) Coolify GitHub-App webhook by calling Coolify's
+# deploy API directly with an API token. Fires on every push to main.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Coolify deployment
+        run: |
+          curl --fail-with-body -sS \
+            "https://coolify.mght630.com/api/v1/deploy?uuid=wocw4w0swk4cws8k8gws4k88&force=false" \
+            -H "Authorization: Bearer ${{ secrets.COOLIFY_TOKEN }}"
