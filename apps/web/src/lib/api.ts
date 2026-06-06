@@ -56,4 +56,5 @@ export const api = {
     req<EnergySeriesDTO>(`/api/energy/series?from=${from}&to=${to}&res=${res}`),
   energySpeed: (from: number, to: number) =>
     req<SpeedDistDTO>(`/api/energy/speed?from=${from}&to=${to}`),
+  resetEnergy: () => req<{ ok: boolean; removed: number }>("/api/energy/reset", { method: "POST" }),
 };

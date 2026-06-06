@@ -56,6 +56,25 @@ export function stopFlusher(): void {
   }
 }
 
+/**
+ * Wipe all recorded telemetry, resetting the energy stats to empty. Also drops
+ * any samples still buffered in memory so they don't repopulate on the next flush.
+ * Returns the number of rows removed.
+ */
+export async function purgeAll(): Promise<number> {
+  buffer.splice(0, buffer.length);
+  if (!getPool()) return 0;
+  try {
+    const rows = await query<{ count: string }>(
+      "with deleted as (delete from telemetry_raw returning 1) select count(*)::text as count from deleted",
+    );
+    return Number(rows[0]?.count ?? 0);
+  } catch (err) {
+    logger.debug({ err: (err as Error).message }, "telemetry purge failed");
+    return 0;
+  }
+}
+
 export interface HourBucket {
   bucket: number;
   avgWatts: number;

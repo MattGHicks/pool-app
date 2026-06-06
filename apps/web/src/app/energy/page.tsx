@@ -1,9 +1,10 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Card, Stat } from "@/components/ui";
 import { AreaChart, BarSeries, StackedBar } from "@/components/charts";
 import { useStore } from "@/lib/store";
 import { api } from "@/lib/api";
+import { haptics } from "@/lib/haptics";
 import { fmtDollars, fmtWatts } from "@/lib/format";
 import { calibratedWatts, estGpm } from "@/lib/curves";
 import type { EnergySummaryDTO, EnergyBucketDTO } from "@pool/types";
@@ -118,8 +119,10 @@ export default function EnergyPage() {
   const history = useStore((s) => s.history);
   const [range, setRange] = useState<RangeKey>("today");
   const [data, setData] = useState<Loaded | null>(null);
+  const [confirmingReset, setConfirmingReset] = useState(false);
+  const [resetting, setResetting] = useState(false);
 
-  useEffect(() => {
+  const load = useCallback((): (() => void) => {
     let cancelled = false;
     const { from, to, res } = rangeBounds(range);
     Promise.all([api.energySummary(from, to), api.energySeries(from, to, res), api.energySpeed(from, to)])
@@ -134,6 +137,21 @@ export default function EnergyPage() {
       cancelled = true;
     };
   }, [range]);
+
+  useEffect(() => load(), [load]);
+
+  const resetStats = async (): Promise<void> => {
+    setResetting(true);
+    haptics.apply();
+    try {
+      await api.resetEnergy();
+    } catch {
+      /* offline / demo */
+    }
+    setConfirmingReset(false);
+    setResetting(false);
+    load();
+  };
 
   const res: "hour" | "day" = range === "today" ? "hour" : "day";
   const buckets = data?.buckets ?? [];
@@ -322,6 +340,49 @@ export default function EnergyPage() {
         Billing uses the panel meter (Emporia); the pump&apos;s RS-485 watts read a little lower than true
         wall power. Charts fill in as the pump runs and history accumulates.
       </p>
+
+      {/* Reset stats */}
+      {confirmingReset ? (
+        <Card className="space-y-3 border border-coral/40 p-4">
+          <div className="flex items-start gap-2">
+            <span className="text-base leading-none text-coral">⚠</span>
+            <div className="space-y-1">
+              <div className="text-sm text-coral">Reset all energy stats?</div>
+              <p className="text-[0.66rem] leading-relaxed text-text-dim">
+                This permanently deletes all recorded telemetry — energy, cost, runtime, charts and
+                speed history will be wiped and can&apos;t be recovered. New data starts collecting
+                from scratch.
+              </p>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              onClick={() => setConfirmingReset(false)}
+              disabled={resetting}
+              className="rounded-xl border border-border py-2.5 text-sm text-text-dim transition active:bg-surface-2 disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => void resetStats()}
+              disabled={resetting}
+              className="rounded-xl border border-coral/60 bg-coral/10 py-2.5 text-sm text-coral transition active:bg-coral/20 disabled:opacity-50"
+            >
+              {resetting ? "Resetting…" : "Reset stats"}
+            </button>
+          </div>
+        </Card>
+      ) : (
+        <button
+          onClick={() => {
+            haptics.toggle();
+            setConfirmingReset(true);
+          }}
+          className="w-full pb-2 text-center text-[0.74rem] text-coral/80 transition active:text-coral"
+        >
+          Reset energy stats
+        </button>
+      )}
     </div>
   );
 }

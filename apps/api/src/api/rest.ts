@@ -204,4 +204,11 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
     const bands = await telemetry.speedBands(from, to);
     return { bands };
   });
+
+  // --- reset energy stats (wipes all recorded telemetry) ---
+  app.post("/api/energy/reset", guarded, async () => {
+    const removed = await telemetry.purgeAll();
+    void events.logEvent("energy_reset", { removed }, "warn", "rest");
+    return { ok: true, removed };
+  });
 }
