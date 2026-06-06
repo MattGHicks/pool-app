@@ -79,6 +79,10 @@ export class Engine {
       // the pump in override and away from its onboard-schedule timeout.
       await this.queue.send(remoteControl(true, this.pumpAddr), "remote-enable");
       if (target > 0) {
+        // Explicitly command RUN so a *stopped* pump actually starts. setRpm only
+        // sets the speed setpoint; without a run command the drive stays stopped
+        // (e.g. during the pump's onboard off-period). Idempotent while running.
+        await this.queue.send(runStop(true, this.pumpAddr), "run");
         await this.queue.send(setRpm(target, this.pumpAddr), `set-rpm-${target}`);
       } else {
         await this.queue.send(runStop(false, this.pumpAddr), "stop");
