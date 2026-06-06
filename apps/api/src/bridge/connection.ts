@@ -93,7 +93,7 @@ export class BridgeConnection {
     const merged = new Uint8Array(this.rxBuf.length + chunk.length);
     merged.set(this.rxBuf, 0);
     merged.set(chunk, this.rxBuf.length);
-    const { frames, consumed } = scanFrames(merged);
+    const { frames, consumed } = scanFrames(merged, { verifyChecksum: true });
     this.rxBuf = merged.slice(consumed);
     if (this.rxBuf.length > MAX_RX_BUFFER) this.rxBuf = new Uint8Array(0);
     for (const f of frames) {

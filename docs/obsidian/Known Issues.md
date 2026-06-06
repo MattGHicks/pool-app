@@ -59,6 +59,18 @@ The bridge was moved into a 3D-printed box on 2026-06-06. Early signs are fine (
 
 **Also fixed (UI):** `ActiveScheduleCard` ignored `daysOfWeek` and would show "Running now X rpm" even on days the schedule doesn't run; it now respects the day and shows **"Off today"**. (This was a red herring during diagnosis — the real cause was the stale cache above.)
 
+## ✅ RESOLVED — Dashboard clock / RPM / fault flicker (corrupted frames)
+**Symptom:** the header clock (and occasionally RPM/status) briefly flickered to a wrong value, then corrected — e.g. the clock jumping to a "totally different time" for one update.
+
+**Cause:** the header clock is the **pump's own onboard clock** decoded from `data[13:14]` of the RS-485 status frame (it is *display-only* — schedules run off the server clock, so this never affects timing). `scanFrames` did **not validate checksums**, so an occasional corrupted / byte-misaligned read (common right after a bridge reconnect) decoded into garbage telemetry for one update.
+
+**Not a control risk:** the engine commands the pump from its *control state*, never from decoded telemetry — a bad frame can't change what's commanded. Worst case was one odd dashboard update + one noisy `telemetry_raw` row.
+
+**Fix:** `scanFrames` gained an opt-in `verifyChecksum`, and the bridge read path (`apps/api/src/bridge/connection.ts`) now enables it — corrupted frames are dropped and we resync, so garbage never reaches the UI or the DB. The checksum is proven correct (matches a real captured frame + every built command in tests). This is the root-cause fix for the flickers the per-field debounce was papering over.
+
+> [!note] Pump clock after a power-cycle
+> The bridge/pump lost power during the 2026-06-06 move. The pump keeps its own RTC (nothing syncs it), so if the header clock looks off by more than the usual <1 min, set it on the pump keypad — it keeps the **onboard fallback schedule** aligned. Doesn't affect app schedules.
+
 ## 🟢 Minor — GHCR token is long-lived
 The host's Docker is logged into GHCR with a classic `read:packages` PAT (for pulling the private guardian image). Rotate whenever; if rotated, re-run the `docker login` (see [[Deployment & Cutover]]).
 
