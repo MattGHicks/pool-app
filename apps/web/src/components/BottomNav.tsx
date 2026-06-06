@@ -23,13 +23,28 @@ export function BottomNav() {
               href={href}
               className="relative flex flex-1 flex-col items-center gap-1 py-1.5"
             >
-              <Icon
-                width={21}
-                height={21}
-                className={active ? "text-aqua" : "text-text-faint"}
-                style={active ? { filter: "drop-shadow(0 0 6px var(--color-aqua))" } : undefined}
-              />
-              <span className={`text-[0.58rem] tracking-wide ${active ? "text-aqua" : "text-text-faint"}`}>
+              <span className="relative grid place-items-center">
+                {/* Soft radial glow behind the active icon — mobile-safe (no SVG
+                    drop-shadow filter, which produced edge artifacts on Chrome mobile). */}
+                {active ? (
+                  <span
+                    aria-hidden
+                    className="pointer-events-none absolute h-9 w-9 rounded-full"
+                    style={{
+                      background:
+                        "radial-gradient(circle, color-mix(in oklab, var(--color-aqua) 42%, transparent) 0%, transparent 68%)",
+                    }}
+                  />
+                ) : null}
+                <Icon
+                  width={21}
+                  height={21}
+                  className={`relative ${active ? "text-aqua" : "text-text-faint"}`}
+                />
+              </span>
+              <span
+                className={`text-[0.58rem] tracking-wide ${active ? "text-aqua" : "text-text-faint"}`}
+              >
                 {label}
               </span>
             </Link>

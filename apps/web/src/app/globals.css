@@ -85,7 +85,15 @@ body::before {
 .glass {
   background: linear-gradient(160deg, rgba(18, 34, 48, 0.72), rgba(10, 19, 28, 0.62));
   backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   border: 1px solid var(--color-border);
+}
+
+/* full-width frosted bar for the sticky top nav */
+.glass-bar {
+  background: linear-gradient(180deg, rgba(13, 24, 34, 0.82), rgba(10, 19, 28, 0.72));
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
 }
 
 .text-balance {

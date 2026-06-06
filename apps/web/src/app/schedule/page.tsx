@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { Card, SectionTitle } from "@/components/ui";
 import { ScheduleTimeline } from "@/components/ScheduleTimeline";
 import { api } from "@/lib/api";
-import { sortSegments, runtimeHours, label12, rpmColor } from "@/lib/schedule";
+import { sortSegments, runtimeHours, rpmColor } from "@/lib/schedule";
 import { haptics } from "@/lib/haptics";
 import type { Schedule, ScheduleSegment, ScheduleInput } from "@pool/types";
 
@@ -284,7 +284,6 @@ export default function SchedulePage() {
                   onChange={(e) => setTime(idx, e.target.value)}
                   className="rounded-lg border border-border bg-surface/60 px-2 py-1.5 font-mono text-sm text-text outline-none focus:border-aqua/50"
                 />
-                <span className="font-mono text-[0.58rem] text-text-faint">{label12(s.start)}</span>
                 <div className="flex-1" />
                 <span
                   className="font-display text-sm"
