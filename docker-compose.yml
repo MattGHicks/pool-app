@@ -21,8 +21,11 @@ services:
     depends_on: [pool-db]
     environment:
       NODE_ENV: production
-      BRIDGE_HOST: 192.168.4.60
-      BRIDGE_PORT: 8899
+      # Defaults talk straight to the ESP32. To cut over to the failover guardian,
+      # set BRIDGE_HOST=pool-guardian in Coolify's env (the guardian's network alias
+      # on the shared coolify network) and redeploy — no code change needed.
+      BRIDGE_HOST: ${BRIDGE_HOST:-192.168.4.60}
+      BRIDGE_PORT: ${BRIDGE_PORT:-8899}
       PUMP_ADDRESS: 96
       DB_HOST: pool-db
       DB_PORT: 5432

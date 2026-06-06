@@ -85,19 +85,31 @@ when `pool-api` disconnects mid-run it keeps re-asserting the last setpoint for 
 (then releases to the onboard schedule). See `apps/guardian/README.md` for behaviour.
 
 **It must be its own Coolify resource, separate from the app stack** — otherwise an app
-redeploy restarts it too and defeats the purpose.
+redeploy restarts it too and defeats the purpose. Do the cutover in this order:
 
-```bash
-# Deploy the guardian (separate resource / compose project):
-docker compose -f docker-compose.guardian.yml up -d --build
+1. **Deploy the guardian** as a new Coolify resource (Docker Compose) using
+   `docker-compose.guardian.yml`, or by SSH:
+   ```bash
+   docker compose -f docker-compose.guardian.yml up -d --build
+   ```
+   It joins the shared `coolify` network with the alias `pool-guardian` and connects out to
+   the ESP32 (`UPSTREAM_HOST=192.168.4.60`). Confirm it's up and connected to the ESP32 in
+   its logs (`upstream (ESP32) connected`).
 
-# Then point pool-api at it and redeploy pool-api:
-#   BRIDGE_HOST = <guardian host or service name>   BRIDGE_PORT = 8899
-```
+2. **Flip pool-api to it** — set `BRIDGE_HOST=pool-guardian` in pool-api's Coolify env (leave
+   `BRIDGE_PORT=8899`) and redeploy pool-api. No code change: the compose defaults to the
+   ESP32 until this env var is set, so the cutover is reversible by clearing it.
+
+3. **Verify:** `curl -s https://poolapi.mght630.com/healthz` shows `"busConnected":true`, and
+   the dashboard shows live RPM/watts — now sourced through the guardian.
 
 Drills: with the guardian in front, `docker restart pool-api` (or a redeploy) should not
 disturb the pump at all; killing the **guardian** for >~15 s falls back to the pump's onboard
 schedule (the pump's own watchdog), same as the no-guardian baseline.
+
+> Note: the calibrate script (`pnpm --filter @pool/api calibrate`) owns the bus directly, so
+> point it at the **ESP32** (`BRIDGE_HOST=192.168.4.60`), not the guardian, and only run it
+> while pool-api is stopped.
 
 ## Notes
 - DNS: `pool.mght630.com` + `poolapi.mght630.com` resolve via the existing `*.mght630.com` wildcard — no new records.
