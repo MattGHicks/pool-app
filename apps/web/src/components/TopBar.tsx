@@ -1,12 +1,10 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useStore } from "@/lib/store";
-import { fmtClock } from "@/lib/format";
 import { IconWaves } from "./icons";
 
 export function TopBar() {
   const connected = useStore((s) => s.connected);
-  const tel = useStore((s) => s.telemetry);
   const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
@@ -36,8 +34,7 @@ export function TopBar() {
           className={`h-2 w-2 rounded-full ${connected ? "bg-aqua" : "bg-text-faint"}`}
           style={connected ? { boxShadow: "0 0 7px var(--color-aqua)" } : undefined}
         />
-        <span className="font-mono text-text-dim">{connected ? "Live" : "Offline"}</span>
-        {tel ? <span className="font-mono text-text-faint">· {fmtClock(tel.clockMinutes)}</span> : null}
+        <span className="font-mono text-text-dim">{connected ? "Connected" : "Offline"}</span>
       </div>
     </header>
   );
