@@ -45,7 +45,9 @@ export function ActiveScheduleCard() {
     );
   }
 
-  const current = rpmAt(sched.segments, now);
+  const today = new Date().getDay();
+  const runsToday = sched.daysOfWeek.includes(today);
+  const current = runsToday ? rpmAt(sched.segments, now) : 0;
   return (
     <Card className="space-y-2.5 p-4">
       <div className="flex items-center justify-between">
@@ -64,7 +66,7 @@ export function ActiveScheduleCard() {
           className="font-display"
           style={{ color: current > 0 ? "var(--color-aqua)" : "var(--color-text-faint)" }}
         >
-          {current > 0 ? `${current} rpm` : "Off"}
+          {!runsToday ? "Off today" : current > 0 ? `${current} rpm` : "Off"}
         </span>
       </div>
     </Card>

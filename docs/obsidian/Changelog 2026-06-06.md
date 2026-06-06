@@ -38,6 +38,11 @@ See [[Redeploy Problem & Fixes]] for the why behind #2/#3/#4, and [[Deployment &
 - Dashboard RPM/fault **flicker** noticed → diagnosed as the **ESP32 link resetting every ~15 min** for ~8 s (not contention; pump never stops). Logged as outstanding in [[Known Issues]].
 - **Cosmetic fix shipped:** homepage Status card debounces the fault (`useStablePumpStatus`) so the transient post-reconnect "Comm failure" frame no longer flashes red.
 
+## Schedule fix (2026-06-06)
+- **Symptom:** schedule mode showed target 0 while the card said "1500 rpm"; a manual preset **Save** fixed it.
+- **Cause:** backend `Scheduler` only reloaded schedules from the DB at startup/edit; the 30 s tick recomputed from a *cached* list that had gone stale.
+- **Fix:** scheduler now reloads from the DB every 30 s (self-heals). Plus `ActiveScheduleCard` now respects `daysOfWeek` ("Off today" instead of a false "Running now"). See [[Known Issues]].
+
 ## Loose threads → see [[Known Issues]]
 - ESP32 ~15‑min reset (root cause on the bridge side — open).
 - GHCR token rotation (re-run `docker login` if rotated).

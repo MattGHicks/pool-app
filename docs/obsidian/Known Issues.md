@@ -47,6 +47,15 @@ Homepage **Status** card now debounces the fault: a non-zero `statusWord` must p
 
 ---
 
+## ✅ RESOLVED — Schedule appeared stuck until a manual "Save"
+**Symptom (2026-06-06):** in Schedule mode the gauge showed target/actual **0** while the Live card said "Running now 1500 rpm". Going to the preset and hitting **Save** (without changing anything) made it start working.
+
+**Cause:** the backend `Scheduler` only **reloaded the schedule list from the DB at startup and on edits**; its 30 s tick merely recomputed the time-of-day RPM from the *cached* list. If that cached list ever went stale/empty (most likely a transient `listSchedules` read swallowed by its `catch` during one of the day's many redeploys), the pump stayed off until something forced a reload. Saving a preset hits `updateSchedule → refreshSchedules → scheduler.refresh()`, which reloaded the DB and fixed it.
+
+**Fix:** `Scheduler.start()` now **reloads from the DB every 30 s** (`void this.refresh()` instead of `this.tick()`), so a stale/failed boot load self-heals within 30 s — no manual save needed. `refresh()` still keeps the cached set if the DB read fails, so it degrades gracefully.
+
+**Also fixed (UI):** `ActiveScheduleCard` ignored `daysOfWeek` and would show "Running now X rpm" even on days the schedule doesn't run; it now respects the day and shows **"Off today"**. (This was a red herring during diagnosis — the real cause was the stale cache above.)
+
 ## 🟢 Minor — GHCR token is long-lived
 The host's Docker is logged into GHCR with a classic `read:packages` PAT (for pulling the private guardian image). Rotate whenever; if rotated, re-run the `docker login` (see [[Deployment & Cutover]]).
 
