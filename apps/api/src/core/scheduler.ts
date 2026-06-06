@@ -72,8 +72,8 @@ export class Scheduler {
     this.tick();
   }
 
+  /** Begin periodic re-evaluation. Call `refresh()` once first to prime the setpoint. */
   start(): void {
-    void this.refresh();
     this.timer = setInterval(() => this.tick(), 30_000);
   }
 
