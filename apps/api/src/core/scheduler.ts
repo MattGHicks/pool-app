@@ -66,6 +66,7 @@ export class Scheduler {
   }
 
   tick(): void {
+    this.state.setScheduleActive(this.schedules.some((s) => s.enabled));
     this.state.setScheduledRpm(activeRpm(this.schedules, new Date()));
   }
 }

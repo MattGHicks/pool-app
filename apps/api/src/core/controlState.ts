@@ -11,6 +11,8 @@ export class ControlState {
   manualRpm = 0;
   /** RPM computed by the scheduler for the current time. */
   scheduledRpm = 0;
+  /** Whether any enabled schedule exists (so empty-schedule mode hands back, not stops). */
+  scheduleActive = false;
   /** epoch ms when a manual override expires (null = until cleared). */
   overrideUntil: number | null = null;
 
@@ -60,6 +62,12 @@ export class ControlState {
   setScheduledRpm(rpm: number): void {
     if (rpm === this.scheduledRpm) return;
     this.scheduledRpm = rpm;
+    if (this.controlMode === "schedule") this.notify();
+  }
+
+  setScheduleActive(active: boolean): void {
+    if (this.scheduleActive === active) return;
+    this.scheduleActive = active;
     if (this.controlMode === "schedule") this.notify();
   }
 

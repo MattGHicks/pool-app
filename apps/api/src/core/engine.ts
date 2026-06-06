@@ -55,15 +55,19 @@ export class Engine {
     this.state.tickOverride();
     const mode = this.state.controlMode;
 
-    if (mode === "off") {
-      if (this.lastAppliedMode !== "off") {
+    // Hand control back to the pump's onboard schedule when explicitly off, OR
+    // when in schedule mode but no schedule is defined (so "Schedule" never
+    // accidentally stops the pump on a fresh install).
+    const releaseToOnboard = mode === "off" || (mode === "schedule" && !this.state.scheduleActive);
+    if (releaseToOnboard) {
+      if (this.lastAppliedMode !== "released") {
         try {
           await this.queue.send(remoteControl(false, this.pumpAddr), "release");
         } catch {
           /* non-fatal: a missed release just means the pump times out instead */
         }
-        this.lastAppliedMode = "off";
-        this.onEvent?.("control_release", { reason: "mode=off" });
+        this.lastAppliedMode = "released";
+        this.onEvent?.("control_release", { reason: mode === "off" ? "hand-to-pump" : "no-schedule" });
         logger.info("control released — pump runs its onboard schedule");
       }
       return;
