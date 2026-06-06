@@ -32,11 +32,10 @@ export function Providers({ children }: { children: ReactNode }) {
     if (authed) connectSockets();
   }, [authed]);
 
-  useEffect(() => {
-    if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("/sw.js").catch(() => {});
-    }
-  }, []);
+  // No service worker: PoolPilot is a live control panel (useless offline), and
+  // an offline cache only caused stale-bundle 404s after deploys. We don't
+  // register one anymore; any previously-installed SW is auto-updated by the
+  // browser to public/sw.js, which purges its caches and unregisters itself.
 
   if (authed === null) {
     return (
