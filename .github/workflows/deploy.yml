@@ -1,7 +1,8 @@
 name: Deploy to Coolify
 
-# Bypasses the (currently broken) Coolify GitHub-App webhook by calling Coolify's
-# deploy API directly with an API token. Fires on every push to main.
+# Coolify is private (LAN/Tailscale only — public requests get 403 by design).
+# So the runner joins the tailnet, then calls Coolify's deploy API on the T630's
+# Tailscale IP. Fires on every push to main.
 on:
   push:
     branches: [main]
@@ -11,8 +12,14 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
+      - name: Connect to Tailscale
+        uses: tailscale/github-action@v2
+        with:
+          authkey: ${{ secrets.TS_AUTHKEY }}
+          version: latest
+
       - name: Trigger Coolify deployment
         run: |
           curl --fail-with-body -sS \
-            "https://coolify.mght630.com/api/v1/deploy?uuid=wocw4w0swk4cws8k8gws4k88&force=false" \
+            "http://100.85.179.110:8000/api/v1/deploy?uuid=wocw4w0swk4cws8k8gws4k88&force=false" \
             -H "Authorization: Bearer ${{ secrets.COOLIFY_TOKEN }}"
