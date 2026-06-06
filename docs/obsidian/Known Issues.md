@@ -1,0 +1,54 @@
+---
+title: Known Issues
+tags: [poolpilot/ops, poolpilot/open]
+status: open
+created: 2026-06-06
+---
+
+# Known Issues / Open Threads
+
+Back to [[PoolPilot]]. Related: [[Operations Runbook]], [[Pump Guardian]], [[Pump Control & Keep-Alive]].
+
+---
+
+## 🟡 OPEN — ESP32 bridge resets its connection every ~15 minutes
+
+> [!warning] Status: outstanding, low priority (cosmetic today). Pick up later.
+> The pump does **not** stop and there is **no bus contention**. It's a periodic, deliberate-looking link reset on the ESP32 side that causes a brief dashboard flicker.
+
+### Symptom
+On the web dashboard, RPM briefly flickers and the **Status** card flashes a fault for ~1–2 s, then recovers. Observed 2026-06-06.
+
+### Evidence
+Guardian (`pool-guardian`) logs show its **upstream (ESP32) connection** dropping and reconnecting at a near-exact cadence:
+```
+19:21:22 → 19:36:23 → 19:51:24 → 20:06:25   (every 15 min 01 s, reconnect ~8–9 s later)
+```
+- Container check confirmed **only one** of each: `pool-web`, `pool-api`, `pool-db`, `pool-guardian` → **no second bus master**, no leftover njsPC. Contention ruled out.
+- `/healthz` showed `lastPollAgeMs` occasionally elevated (~1.7 s vs the usual <1 s) — consistent with the brief relay gap.
+
+### Diagnosis
+- The **900 s (15 min 01 s) precision** means it's a **timer on the ESP32 side**, not random instability. Candidates: a scheduled WiFi/MQTT reconnect, **DHCP lease renewal**, an OTA/maintenance check, or a periodic **firmware reboot/watchdog**.
+- The guardian (and previously pool-api directly) faithfully reconnects; the ~8 s gap is bounded by **how long the ESP32 is away**, so tightening our reconnect backoff wouldn't help.
+- During the ~8 s gap the pump is briefly without keep-alive but **8 s < ~15 s revert window**, so it keeps running. The post-reconnect frame can momentarily report a comms-related `statusWord` (likely code 16 "Comm failure") and a dipped RPM → the flicker.
+- Almost certainly **pre-existing** and independent of the [[Pump Guardian]] (same ESP32 when pool-api connected directly).
+
+### Risk
+Low today. The one real risk: if a drop ever **exceeds ~15 s**, the pump would briefly revert to its onboard schedule and flash a real `SEr`. Killing the 15-min reset removes that margin entirely.
+
+### Mitigation shipped (cosmetic)
+Homepage **Status** card now debounces the fault: a non-zero `statusWord` must persist for **3 consecutive polls** before it shows red, and clears on the first healthy frame (`useStablePumpStatus` in `apps/web/src/app/page.tsx`). So the transient no longer flashes. The momentary RPM wiggle is left honest (debouncing a live gauge would make real speed changes feel laggy).
+
+### Next steps (when picked up)
+- [ ] Identify what's on the ESP32's 15-min timer. **Need to know the firmware** (ESPHome? custom Arduino sketch? esp-link/ser2net?).
+- [ ] Check the router for a ~15-min DHCP lease on `192.168.4.60`; consider a static lease.
+- [ ] Check ESP32 power/WiFi signal and any scheduled-reboot/OTA setting.
+- [ ] Optionally, confirm by tailing guardian logs over an hour: drops should remain ~every 15 min and recover in <15 s.
+
+---
+
+## 🟢 Minor — GHCR token is long-lived
+The host's Docker is logged into GHCR with a classic `read:packages` PAT (for pulling the private guardian image). Rotate whenever; if rotated, re-run the `docker login` (see [[Deployment & Cutover]]).
+
+## 💡 Future option — move failover onto the ESP32 firmware
+The [[Pump Guardian]] currently runs as a container on the host. The "ultimate" form is putting the failover keep-alive on the ESP32 itself (fully host-independent). Bigger lift (custom firmware), not needed now.

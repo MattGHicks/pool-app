@@ -34,6 +34,10 @@ See [[Redeploy Problem & Fixes]] for the why behind #2/#3/#4, and [[Deployment &
 - Energy reset wipes **all** history (not range-scoped) — matched the plain reading of "reset the stats."
 - `FAILOVER_MAX_MS` left at 5 min — comfortably covers a merge + rebuild.
 
-## Loose threads → see [[Operations Runbook]] § Open threads
-- Occasional guardian↔ESP32 reconnect (benign so far).
+## Post-launch observation (2026-06-06)
+- Dashboard RPM/fault **flicker** noticed → diagnosed as the **ESP32 link resetting every ~15 min** for ~8 s (not contention; pump never stops). Logged as outstanding in [[Known Issues]].
+- **Cosmetic fix shipped:** homepage Status card debounces the fault (`useStablePumpStatus`) so the transient post-reconnect "Comm failure" frame no longer flashes red.
+
+## Loose threads → see [[Known Issues]]
+- ESP32 ~15‑min reset (root cause on the bridge side — open).
 - GHCR token rotation (re-run `docker login` if rotated).
