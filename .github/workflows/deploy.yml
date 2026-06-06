@@ -1,7 +1,9 @@
 name: Deploy to Coolify
 
-# Calls Coolify's deploy API on every push to main. Requires Coolify to be
-# reachable from the public internet (it is, once the proxy route is healthy).
+# Runs on a self-hosted runner ON the T630, so it can reach Coolify's API
+# directly at localhost:8000. Coolify's dashboard stays private (not exposed
+# to the public internet) — the runner is inside the network, GitHub just
+# tells it "go".
 on:
   push:
     branches: [main]
@@ -9,10 +11,10 @@ on:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - name: Trigger Coolify deployment
         run: |
           curl --fail-with-body -sS \
-            "https://coolify.mght630.com/api/v1/deploy?uuid=wocw4w0swk4cws8k8gws4k88&force=false" \
+            "http://localhost:8000/api/v1/deploy?uuid=wocw4w0swk4cws8k8gws4k88&force=false" \
             -H "Authorization: Bearer ${{ secrets.COOLIFY_TOKEN }}"
