@@ -60,6 +60,7 @@ async function main(): Promise<void> {
       poller.setPollMs(s.pollMs);
     },
     refreshSchedules: () => scheduler.refresh(),
+    pokePoll: () => poller.pollNow(),
   });
 
   const io = new IOServer(app.server, {

@@ -25,6 +25,8 @@ export interface RouteDeps {
   watchdog: Watchdog;
   onSettingsChange: (s: SettingsDTO) => void;
   refreshSchedules: () => Promise<void>;
+  /** Fire an immediate status poll so the client confirms a control change fast. */
+  pokePoll?: () => void;
 }
 
 export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Promise<void> {

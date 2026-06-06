@@ -79,7 +79,7 @@ export function RadialRpmSlider({ target, actual, size = 280, onApply }: Props) 
     setPending(rpm);
     haptics.apply();
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => onApply(rpm), 700);
+    debounceRef.current = setTimeout(() => onApply(rpm), 350);
   };
 
   useEffect(() => {

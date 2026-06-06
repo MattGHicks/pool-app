@@ -5,9 +5,10 @@ import { IconShield } from "./icons";
 export function FailsafeBanner() {
   const control = useStore((s) => s.control);
   const connected = useStore((s) => s.connected);
-  const mode = control?.controlMode ?? "off";
+  const mode = control?.controlMode ?? "manual";
+  const target = control?.targetRpm ?? 0;
   const label =
-    mode === "manual" ? "Manual override" : mode === "schedule" ? "On app schedule" : "On pump schedule";
+    mode === "schedule" ? "On schedule" : target === 0 ? "Off — pump idle" : "Manual control";
   return (
     <div className="glass flex items-start gap-3 rounded-2xl px-4 py-3">
       <div className="mt-0.5 text-aqua">

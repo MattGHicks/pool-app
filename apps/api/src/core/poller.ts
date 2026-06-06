@@ -24,6 +24,12 @@ export class Poller {
     }
   }
 
+  /** Fire an immediate status request — e.g. right after a control change, so
+   *  the UI confirms the new state without waiting for the next interval tick. */
+  pollNow(): void {
+    this.poll();
+  }
+
   setPollMs(ms: number): void {
     this.pollMs = ms;
     if (this.timer) {

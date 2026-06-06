@@ -1,6 +1,6 @@
 "use client";
 import { useStore } from "@/lib/store";
-import { commandSetRpm, commandResume, commandOff } from "@/lib/controls";
+import { commandSetRpm, commandResume } from "@/lib/controls";
 import { haptics } from "@/lib/haptics";
 
 const PRESETS = [
@@ -11,14 +11,16 @@ const PRESETS = [
 
 export function ControlPad() {
   const control = useStore((s) => s.control);
-  const mode = control?.controlMode ?? "off";
+  const mode = control?.controlMode ?? "manual";
   const target = control?.targetRpm ?? 0;
+  const isManual = mode === "manual";
+  const isOff = isManual && target === 0;
 
   return (
     <div className="space-y-2.5">
       <div className="grid grid-cols-3 gap-2.5">
         {PRESETS.map((p) => {
-          const active = mode === "manual" && Math.abs(target - p.rpm) < 30;
+          const active = isManual && Math.abs(target - p.rpm) < 30;
           return (
             <button
               key={p.rpm}
@@ -53,20 +55,20 @@ export function ControlPad() {
               : "border-border bg-surface/40 text-text active:bg-surface-2/60"
           }`}
         >
-          App Schedule
+          Schedule
         </button>
         <button
           onClick={() => {
             haptics.toggle();
-            void commandOff();
+            void commandSetRpm(0);
           }}
           className={`rounded-xl border px-3 py-3 text-sm transition ${
-            mode === "off"
+            isOff
               ? "border-amber/60 bg-amber/10 text-amber"
               : "border-border bg-surface/40 text-text active:bg-surface-2/60"
           }`}
         >
-          Pump Schedule
+          Off
         </button>
       </div>
     </div>
