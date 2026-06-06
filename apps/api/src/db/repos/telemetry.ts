@@ -83,3 +83,75 @@ export async function hourlyBuckets(fromMs: number, toMs: number): Promise<HourB
     return [];
   }
 }
+
+export interface SeriesBucket {
+  ts: number;
+  avgWatts: number;
+  maxWatts: number;
+  avgRpm: number;
+  runFrac: number;
+}
+
+/** Bucketed telemetry series for charting, truncated to local (tz) hour/day boundaries. */
+export async function series(
+  fromMs: number,
+  toMs: number,
+  res: "hour" | "day",
+  tz: string,
+): Promise<SeriesBucket[]> {
+  if (!getPool()) return [];
+  try {
+    const rows = await query<{
+      bucket: string;
+      avg_watts: number | null;
+      max_watts: number | null;
+      avg_rpm: number | null;
+      run_frac: number | null;
+    }>(
+      `select (date_trunc($3, ts at time zone $4) at time zone $4) as bucket,
+              avg(watts)::float as avg_watts,
+              max(watts)::float as max_watts,
+              avg(rpm)::float as avg_rpm,
+              avg(case when running then 1 else 0 end)::float as run_frac
+       from telemetry_raw
+       where ts >= to_timestamp($1 / 1000.0) and ts < to_timestamp($2 / 1000.0)
+       group by 1 order by 1`,
+      [fromMs, toMs, res, tz],
+    );
+    return rows.map((r) => ({
+      ts: new Date(r.bucket).getTime(),
+      avgWatts: r.avg_watts ?? 0,
+      maxWatts: r.max_watts ?? 0,
+      avgRpm: r.avg_rpm ?? 0,
+      runFrac: r.run_frac ?? 0,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+/** Sample counts per speed band (≈ seconds at ~1 Hz polling). */
+export async function speedBands(
+  fromMs: number,
+  toMs: number,
+): Promise<Array<{ band: string; samples: number }>> {
+  if (!getPool()) return [];
+  try {
+    const rows = await query<{ band: string; samples: string }>(
+      `select case
+                when rpm <= 0 then 'off'
+                when rpm < 1800 then 'low'
+                when rpm < 2700 then 'mid'
+                else 'high'
+              end as band,
+              count(*) as samples
+       from telemetry_raw
+       where ts >= to_timestamp($1 / 1000.0) and ts < to_timestamp($2 / 1000.0)
+       group by 1`,
+      [fromMs, toMs],
+    );
+    return rows.map((r) => ({ band: r.band, samples: Number(r.samples) }));
+  } catch {
+    return [];
+  }
+}

@@ -110,8 +110,35 @@ export const EnergySummaryDTO = z.object({
   runtimeHours: z.number(),
   turnovers: z.number(),
   efficiencyPct: z.number(),
+  avgWatts: z.number().default(0),
+  peakWatts: z.number().default(0),
+  gallons: z.number().default(0),
 });
 export type EnergySummaryDTO = z.infer<typeof EnergySummaryDTO>;
+
+/** One time-bucket of telemetry (hour or day) for charts. */
+export const EnergyBucketDTO = z.object({
+  ts: z.number(),
+  avgWatts: z.number(),
+  maxWatts: z.number(),
+  avgRpm: z.number(),
+  runFrac: z.number(),
+});
+export type EnergyBucketDTO = z.infer<typeof EnergyBucketDTO>;
+
+export const EnergySeriesDTO = z.object({
+  from: z.number(),
+  to: z.number(),
+  res: z.enum(["hour", "day"]),
+  buckets: z.array(EnergyBucketDTO),
+});
+export type EnergySeriesDTO = z.infer<typeof EnergySeriesDTO>;
+
+/** Time spent in each speed band (sample counts ≈ seconds at ~1 Hz). */
+export const SpeedDistDTO = z.object({
+  bands: z.array(z.object({ band: z.string(), samples: z.number() })),
+});
+export type SpeedDistDTO = z.infer<typeof SpeedDistDTO>;
 
 export const LoginRequest = z.object({
   password: z.string().min(1),

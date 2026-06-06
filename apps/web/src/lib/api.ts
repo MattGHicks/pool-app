@@ -1,4 +1,12 @@
-import type { Schedule, ScheduleInput, SettingsDTO, SettingsInput, EnergySummaryDTO } from "@pool/types";
+import type {
+  Schedule,
+  ScheduleInput,
+  SettingsDTO,
+  SettingsInput,
+  EnergySummaryDTO,
+  EnergySeriesDTO,
+  SpeedDistDTO,
+} from "@pool/types";
 
 export const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -44,4 +52,8 @@ export const api = {
     req<SettingsDTO>("/api/settings", { method: "PUT", body: JSON.stringify(s) }),
   energySummary: (from: number, to: number) =>
     req<EnergySummaryDTO>(`/api/energy/summary?from=${from}&to=${to}`),
+  energySeries: (from: number, to: number, res: "hour" | "day") =>
+    req<EnergySeriesDTO>(`/api/energy/series?from=${from}&to=${to}&res=${res}`),
+  energySpeed: (from: number, to: number) =>
+    req<SpeedDistDTO>(`/api/energy/speed?from=${from}&to=${to}`),
 };

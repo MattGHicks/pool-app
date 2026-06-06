@@ -163,6 +163,12 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
       kwh += b.avgWatts / 1000; // each bucket ≈ 1 hour
       runtimeHours += b.runFrac;
     }
+    let peakWatts = 0;
+    let sumWatts = 0;
+    for (const b of buckets) {
+      if (b.avgWatts > peakWatts) peakWatts = b.avgWatts;
+      sumWatts += b.avgWatts;
+    }
     const cost = kwh * settings.ratePerKwh;
     const gallons = kwh * settings.wefGalPerKwh;
     const turnovers = settings.poolGallons > 0 ? gallons / settings.poolGallons : 0;
@@ -174,6 +180,28 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
       runtimeHours,
       turnovers,
       efficiencyPct: efficiencyPct(turnovers),
+      avgWatts: buckets.length > 0 ? sumWatts / buckets.length : 0,
+      peakWatts,
+      gallons,
     };
+  });
+
+  // --- energy time series (for charts) ---
+  app.get("/api/energy/series", guarded, async (req) => {
+    const q = req.query as { from?: string; to?: string; res?: string };
+    const to = q.to ? Number(q.to) : Date.now();
+    const from = q.from ? Number(q.from) : to - 24 * 60 * 60 * 1000;
+    const res: "hour" | "day" = q.res === "day" ? "day" : "hour";
+    const buckets = await telemetry.series(from, to, res, config.POOL_TZ);
+    return { from, to, res, buckets };
+  });
+
+  // --- speed distribution ---
+  app.get("/api/energy/speed", guarded, async (req) => {
+    const q = req.query as { from?: string; to?: string };
+    const to = q.to ? Number(q.to) : Date.now();
+    const from = q.from ? Number(q.from) : to - 24 * 60 * 60 * 1000;
+    const bands = await telemetry.speedBands(from, to);
+    return { bands };
   });
 }
