@@ -30,6 +30,8 @@ export const api = {
   updateSchedule: (id: string, s: ScheduleInput) =>
     req<Schedule>(`/api/schedules/${id}`, { method: "PUT", body: JSON.stringify(s) }),
   deleteSchedule: (id: string) => req(`/api/schedules/${id}`, { method: "DELETE" }),
+  activateSchedule: (id: string) =>
+    req<Schedule>(`/api/schedules/${id}/activate`, { method: "POST" }),
   settings: () => req<SettingsDTO>("/api/settings"),
   updateSettings: (s: SettingsInput) =>
     req<SettingsDTO>("/api/settings", { method: "PUT", body: JSON.stringify(s) }),

@@ -124,6 +124,14 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
     return { ok: true };
   });
 
+  app.post("/api/schedules/:id/activate", guarded, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const updated = await schedules.activateSchedule(id);
+    await deps.refreshSchedules();
+    if (!updated) return reply.code(404).send({ error: "not found" });
+    return updated;
+  });
+
   // --- settings ---
   app.get("/api/settings", guarded, async () => settingsRepo.getSettings());
 

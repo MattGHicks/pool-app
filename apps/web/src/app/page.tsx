@@ -2,6 +2,7 @@
 import { Gauge } from "@/components/Gauge";
 import { RadialRpmSlider } from "@/components/RadialRpmSlider";
 import { ControlPad } from "@/components/ControlPad";
+import { ActiveScheduleCard } from "@/components/ActiveScheduleCard";
 import { FailsafeBanner } from "@/components/FailsafeBanner";
 import { Sparkline } from "@/components/Sparkline";
 import { Card, Stat } from "@/components/ui";
@@ -30,6 +31,12 @@ export default function LivePage() {
       <div className="rise" style={{ animationDelay: "60ms" }}>
         <ControlPad />
       </div>
+
+      {control?.controlMode === "schedule" ? (
+        <div className="rise" style={{ animationDelay: "90ms" }}>
+          <ActiveScheduleCard />
+        </div>
+      ) : null}
 
       <div className="rise grid grid-cols-2 gap-3" style={{ animationDelay: "120ms" }}>
         <Card className="grid place-items-center py-3">

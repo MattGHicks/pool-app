@@ -58,3 +58,14 @@ export async function deleteSchedule(id: string): Promise<boolean> {
   const rows = await query<{ id: string }>("delete from schedules where id = $1 returning id", [id]);
   return rows.length > 0;
 }
+
+/** Make exactly one schedule active (enabled): the given id on, all others off. */
+export async function activateSchedule(id: string): Promise<Schedule | null> {
+  if (!getPool()) return null;
+  await query("update schedules set enabled = (id = $1), updated_at = now()", [id]);
+  const rows = await query<ScheduleRow>(
+    "select id, name, enabled, segments, days_of_week, priority from schedules where id = $1",
+    [id],
+  );
+  return rows[0] ? toSchedule(rows[0]) : null;
+}
