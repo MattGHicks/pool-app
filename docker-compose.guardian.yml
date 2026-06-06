@@ -21,11 +21,15 @@ services:
       PUMP_ADDRESS: 96
       KEEP_ALIVE_MS: ${KEEP_ALIVE_MS:-5000}
       FAILOVER_MAX_MS: ${FAILOVER_MAX_MS:-300000}
-    # Published so pool-api (and the calibrate script) can reach it. If pool-api
-    # shares the coolify network, it can instead use the service name + port 8899.
+    # Published on the host for the calibrate script / debugging. pool-api reaches
+    # the guardian over the shared coolify network via the `pool-guardian` alias
+    # below (set BRIDGE_HOST=pool-guardian on pool-api).
     ports:
       - "8899:8899"
-    networks: [coolify]
+    networks:
+      coolify:
+        aliases:
+          - pool-guardian
 
 networks:
   coolify:
