@@ -18,7 +18,7 @@ export function TopBar() {
 
   return (
     <header
-      className={`sticky top-0 z-30 flex items-center justify-between px-4 py-3 transition-colors duration-300 ${
+      className={`sticky top-0 z-30 flex items-center justify-between px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] transition-colors duration-300 ${
         scrolled ? "glass-bar border-b border-border" : "border-b border-transparent"
       }`}
     >
