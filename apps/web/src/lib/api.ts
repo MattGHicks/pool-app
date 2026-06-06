@@ -3,10 +3,17 @@ import type { Schedule, ScheduleInput, SettingsDTO, SettingsInput, EnergySummary
 export const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
+  // Only send a JSON content-type when there's actually a body — Fastify rejects
+  // an empty body with content-type: application/json (FST_ERR_CTP_EMPTY_JSON_BODY),
+  // which silently broke every no-body POST (activate, resume-schedule, off, logout).
+  const hasBody = init?.body != null;
   const res = await fetch(`${API_BASE}${path}`, {
     credentials: "include",
-    headers: { "content-type": "application/json" },
     ...init,
+    headers: {
+      ...(hasBody ? { "content-type": "application/json" } : {}),
+      ...((init?.headers as Record<string, string> | undefined) ?? {}),
+    },
   });
   if (!res.ok) throw new Error(`request failed: ${res.status}`);
   return (await res.json()) as T;
