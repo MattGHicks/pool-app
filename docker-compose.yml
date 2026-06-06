@@ -31,6 +31,10 @@ services:
       DB_NAME: pool
       POLL_MS: 1000
       KEEP_ALIVE_MS: ${KEEP_ALIVE_MS:-5000}
+      # Keep false so redeploys are seamless: the pump holds its speed across the
+      # container swap and reverts to its onboard schedule on its own timeout if we
+      # don't come back. Set true to force an immediate handoff on shutdown instead.
+      RELEASE_ON_SHUTDOWN: ${RELEASE_ON_SHUTDOWN:-false}
       SESSION_SECRET: ${SESSION_SECRET}
       POOL_PASSWORD: ${POOL_PASSWORD}
       COOKIE_DOMAIN: .mght630.com

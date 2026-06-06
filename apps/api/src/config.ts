@@ -20,6 +20,15 @@ const EnvSchema = z.object({
   POOL_TZ: z.string().default("America/New_York"),
   POLL_MS: z.coerce.number().int().min(250).default(1000),
   KEEP_ALIVE_MS: z.coerce.number().int().min(1000).default(5000),
+  // On shutdown, whether to explicitly hand the pump back to its onboard schedule
+  // (remoteControl(false)). Default false: we just stop the keep-alive and let the
+  // pump hold its speed, reverting on its own ~3·KEEP_ALIVE_MS timeout. That makes a
+  // quick redeploy seamless (no stop / fault code) since the new instance re-asserts
+  // control before the pump times out. Set true to force the immediate handoff.
+  RELEASE_ON_SHUTDOWN: z
+    .string()
+    .default("false")
+    .transform((v) => v === "true" || v === "1"),
   SESSION_SECRET: z.string().min(16).default("dev-only-insecure-secret-change-me-now"),
   // Either a precomputed scrypt hash, OR a plaintext password (hashed at startup).
   // POOL_PASSWORD takes precedence — handy because a 161-char hash is easy to truncate.
