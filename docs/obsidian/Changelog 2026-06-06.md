@@ -48,6 +48,11 @@ See [[Redeploy Problem & Fixes]] for the why behind #2/#3/#4, and [[Deployment &
 - **Full health sweep passed:** all four containers `Up`; `pool-guardian` at 3 h uptime (untouched by every app redeploy — independent-deploy design working); `/healthz` `busConnected:true`, `controlMode:schedule`, `lastPollAgeMs ~1 s`; pool-api `bridge connected { host: 'pool-guardian' }` (cutover intact); a redeploy held the pump at **1500 rpm** seamlessly; schedule driving the pump; no errors.
 - **State: done.** Only open thread is the ~15-min ESP32 reset (cosmetic; watch whether the new box position changes its frequency) — see [[Known Issues]].
 
+## Frame validation (2026-06-06)
+- **Symptom:** header clock (the *pump's* onboard clock) flickered to a wrong time for one update; same root as the earlier RPM/fault flickers.
+- **Cause:** `scanFrames` didn't validate checksums, so an occasional corrupted/misaligned read decoded into garbage telemetry. Not a control risk (engine commands from control state, not telemetry).
+- **Fix:** opt-in `verifyChecksum` on `scanFrames`; the bridge read path now drops bad frames and resyncs. Protocol tests 13/13. See [[Known Issues]].
+
 ## Loose threads → see [[Known Issues]]
 - ESP32 ~15‑min reset (root cause on the bridge side — open).
 - GHCR token rotation (re-run `docker login` if rotated).

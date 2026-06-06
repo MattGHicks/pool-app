@@ -1,5 +1,16 @@
 import { START } from "./constants.js";
+import { checksum } from "./checksum.js";
 import type { RawFrame } from "./types.js";
+
+export interface ScanOptions {
+  /**
+   * Drop frames whose trailing 2-byte checksum doesn't match the body. Filters
+   * out corrupted / byte-misaligned reads (common right after a bridge reconnect)
+   * that would otherwise decode into garbage telemetry. Off by default to preserve
+   * the lenient behavior; read paths that decode status should turn it on.
+   */
+  verifyChecksum?: boolean;
+}
 
 /**
  * Scan a byte buffer for complete Pentair frames, reporting how many bytes were
@@ -10,9 +21,13 @@ import type { RawFrame } from "./types.js";
  * whose declared length runs past the end of the buffer is treated as a partial
  * read: scanning stops and `consumed` points at that START so the caller retains it.
  *
- * Checksums are not verified (the bus is reliable; verify upstream if needed).
+ * With `verifyChecksum`, a complete frame whose checksum is wrong is treated as
+ * noise: we resync from the next byte rather than emit garbage.
  */
-export function scanFrames(buf: Uint8Array): { frames: RawFrame[]; consumed: number } {
+export function scanFrames(
+  buf: Uint8Array,
+  opts: ScanOptions = {},
+): { frames: RawFrame[]; consumed: number } {
   const frames: RawFrame[] = [];
   let i = 0;
   while (i + 6 <= buf.length) {
@@ -20,6 +35,13 @@ export function scanFrames(buf: Uint8Array): { frames: RawFrame[]; consumed: num
       const len = buf[i + 5] ?? 0;
       const end = i + 6 + len + 2;
       if (end <= buf.length) {
+        if (opts.verifyChecksum) {
+          const [hi, lo] = checksum(buf.subarray(i, i + 6 + len));
+          if (buf[i + 6 + len] !== hi || buf[i + 6 + len + 1] !== lo) {
+            i += 1; // bad checksum — treat as noise and resync from the next byte
+            continue;
+          }
+        }
         frames.push({
           dst: buf[i + 2] ?? 0,
           src: buf[i + 3] ?? 0,

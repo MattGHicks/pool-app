@@ -99,6 +99,20 @@ describe("findFrames + decodeStatus", () => {
     expect(decodeStatus(pump!.data).rpm).toBe(1500);
   });
 
+  it("verifyChecksum keeps a valid frame but drops a corrupted one", () => {
+    // valid frame passes through unchanged
+    expect(scanFrames(reply, { verifyChecksum: true }).frames).toHaveLength(1);
+
+    // flip a data byte so the trailing checksum no longer matches → dropped
+    const corrupt = Uint8Array.from(reply);
+    corrupt[13] = (corrupt[13]! + 1) & 0xff; // the clock-HH byte (would misdecode the time)
+    const { frames } = scanFrames(corrupt, { verifyChecksum: true });
+    expect(frames).toHaveLength(0);
+
+    // without verification, the corrupted frame still decodes (old lenient behavior)
+    expect(scanFrames(corrupt).frames).toHaveLength(1);
+  });
+
   it("scanFrames retains a trailing partial frame (TCP fragmentation)", () => {
     // full reply followed by the first 4 bytes of a second, incomplete frame
     const partial = Uint8Array.from([...reply, 0xff, 0x00, 0xff, 0xa5]);
