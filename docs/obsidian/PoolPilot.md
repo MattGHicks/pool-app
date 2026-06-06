@@ -19,6 +19,7 @@ Replaces nodejs‑poolController. Mobile‑first dashboard, scheduling, energy a
 - [[Deployment & Cutover]] — Coolify, compose files, GHCR image, the env-flip cutover
 - [[Operations Runbook]] — commands, `/healthz`, failsafe drills, troubleshooting
 - [[Redeploy Problem & Fixes]] — the original "motor shuts off on deploy" issue and how it was solved
+- [[Known Issues]] — outstanding threads (incl. the ~15‑min ESP32 link reset)
 - [[Changelog 2026-06-06]] — everything shipped in this session
 
 ## Quick facts

@@ -1,4 +1,6 @@
 "use client";
+import { useEffect, useRef, useState } from "react";
+import type { TelemetryDTO } from "@pool/types";
 import { Gauge } from "@/components/Gauge";
 import { RadialRpmSlider } from "@/components/RadialRpmSlider";
 import { ControlPad } from "@/components/ControlPad";
@@ -10,6 +12,32 @@ import { useStore } from "@/lib/store";
 import { commandSetRpm } from "@/lib/controls";
 import { fmtRpm, fmtWatts, fmtDollars } from "@/lib/format";
 
+/**
+ * Debounce the pump's fault status so a brief transient — e.g. the "Comm failure"
+ * frame the pump emits right after the bridge's periodic ~8s reconnect — doesn't
+ * flash the Status card red. A fault only surfaces once statusWord stays non-zero
+ * for a few consecutive polls, and clears on the first healthy frame.
+ * (See docs/obsidian "Known Issues": the ESP32 link resets ~every 15 min.)
+ */
+function useStablePumpStatus(tel: TelemetryDTO | null): { ok: boolean; statusText: string } {
+  const [state, setState] = useState<{ ok: boolean; statusText: string }>({
+    ok: true,
+    statusText: "—",
+  });
+  const badFrames = useRef(0);
+  useEffect(() => {
+    if (!tel) return;
+    if (tel.statusWord === 0) {
+      badFrames.current = 0;
+      setState({ ok: true, statusText: tel.statusText });
+    } else {
+      badFrames.current += 1;
+      if (badFrames.current >= 3) setState({ ok: false, statusText: tel.statusText });
+    }
+  }, [tel]);
+  return state;
+}
+
 export default function LivePage() {
   const tel = useStore((s) => s.telemetry);
   const control = useStore((s) => s.control);
@@ -20,7 +48,7 @@ export default function LivePage() {
   const target = control?.targetRpm ?? rpm;
   const gpm = tel?.estGpm ?? 0;
   const dph = tel?.dollarsPerHour ?? 0;
-  const ok = !tel || tel.statusWord === 0;
+  const { ok, statusText } = useStablePumpStatus(tel);
 
   return (
     <div className="space-y-4">
@@ -72,7 +100,7 @@ export default function LivePage() {
         <Card className="py-4">
           <Stat
             label="Status"
-            value={tel?.statusText ?? "—"}
+            value={statusText}
             color={ok ? "var(--color-aqua)" : "var(--color-coral)"}
           />
         </Card>

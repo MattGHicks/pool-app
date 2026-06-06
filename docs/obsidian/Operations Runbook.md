@@ -61,6 +61,4 @@ BRIDGE_HOST=192.168.4.60 pnpm --filter @pool/api calibrate   # prints recommende
 Energy page has a **Reset energy stats** button (coral, with a confirmation card). It calls `POST /api/energy/reset`, which wipes `telemetry_raw` (all recorded telemetry) and logs an `energy_reset` event. Charts repopulate from scratch.
 
 ## Open threads
-- [ ] Occasional **guardian↔ESP32 reconnect** (`ECONNRESET` then reconnect within seconds). Harmless so far (well under 15 s), likely the ESP32/network. Investigate only if the pump hiccups *outside* a deploy.
-- [ ] GHCR `read:packages` token is long-lived; rotate at will (then re-run `docker login`).
-- [ ] Possible future: move failover onto the ESP32 firmware itself (fully host-independent) — bigger lift, not needed now.
+See [[Known Issues]] for the full list, including the **~15‑min ESP32 link reset** (diagnosed 2026-06-06; cosmetic dashboard fix shipped, root cause on the ESP32 side still open).
