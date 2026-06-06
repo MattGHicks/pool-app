@@ -3,7 +3,7 @@ import { useEffect, useRef, useState, type PointerEvent as RPE } from "react";
 import { haptics } from "@/lib/haptics";
 import { fmtRpm } from "@/lib/format";
 
-const MIN = 1000;
+const MIN = 0;
 const MAX = 3450;
 const START_DEG = 135;
 const SWEEP = 270;

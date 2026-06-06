@@ -53,7 +53,7 @@ export function ControlPad() {
               : "border-border bg-surface/40 text-text active:bg-surface-2/60"
           }`}
         >
-          Schedule
+          App Schedule
         </button>
         <button
           onClick={() => {
@@ -66,7 +66,7 @@ export function ControlPad() {
               : "border-border bg-surface/40 text-text active:bg-surface-2/60"
           }`}
         >
-          Hand to pump
+          Pump Schedule
         </button>
       </div>
     </div>

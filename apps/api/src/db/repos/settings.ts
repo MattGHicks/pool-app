@@ -1,5 +1,6 @@
 import { query, getPool } from "../pool.js";
 import { config } from "../../config.js";
+import { ControlMode } from "@pool/types";
 import type { SettingsDTO, SettingsInput } from "@pool/types";
 
 const DEFAULTS: SettingsDTO = {
@@ -67,4 +68,38 @@ export async function updateSettings(input: SettingsInput): Promise<SettingsDTO>
     await query(`update settings set ${sets.join(", ")} where id = 1`, params);
   }
   return getSettings();
+}
+
+export interface ControlIntent {
+  mode: ControlMode;
+  manualRpm: number;
+}
+
+/** Load the persisted control intent (mode + manual setpoint). Null if no DB/row. */
+export async function getControlIntent(): Promise<ControlIntent | null> {
+  if (!getPool()) return null;
+  try {
+    const rows = await query<{ control_mode: string; manual_rpm: number }>(
+      "select control_mode, manual_rpm from settings where id = 1",
+    );
+    const r = rows[0];
+    if (!r) return null;
+    const parsed = ControlMode.safeParse(r.control_mode);
+    return { mode: parsed.success ? parsed.data : "schedule", manualRpm: r.manual_rpm ?? 0 };
+  } catch {
+    return null;
+  }
+}
+
+/** Persist the control intent so a restart/redeploy resumes it. Non-fatal on failure. */
+export async function saveControlIntent(intent: ControlIntent): Promise<void> {
+  if (!getPool()) return;
+  try {
+    await query("update settings set control_mode = $1, manual_rpm = $2, updated_at = now() where id = 1", [
+      intent.mode,
+      intent.manualRpm,
+    ]);
+  } catch {
+    /* non-fatal: losing the persisted intent just means a restart falls back to App Schedule */
+  }
 }

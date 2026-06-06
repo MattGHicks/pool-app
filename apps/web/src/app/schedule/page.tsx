@@ -110,7 +110,7 @@ export default function SchedulePage() {
 
   return (
     <div className="space-y-4 pt-2">
-      <SectionTitle>Daily schedule</SectionTitle>
+      <SectionTitle>App schedule</SectionTitle>
       <Card className="rise space-y-3 p-4">
         <Timeline segs={segs} />
         <p className="text-[0.72rem] leading-relaxed text-text-faint">

@@ -15,6 +15,7 @@ import { Watchdog } from "./core/watchdog.js";
 import { migrate } from "./db/migrate.js";
 import { pingDb, isDbConnected, closeDb } from "./db/pool.js";
 import * as schedulesRepo from "./db/repos/schedules.js";
+import * as settingsRepo from "./db/repos/settings.js";
 import * as telemetryRepo from "./db/repos/telemetry.js";
 import * as eventsRepo from "./db/repos/events.js";
 import { registerRoutes } from "./api/rest.js";
@@ -30,6 +31,15 @@ async function main(): Promise<void> {
   let pollMs = config.POLL_MS;
 
   const state = new ControlState();
+  // Persist control intent (mode + manual setpoint) and restore it on boot, so a
+  // redeploy/restart resumes the App Schedule (or last manual speed) instead of
+  // handing control back to the pump's onboard schedule.
+  state.setIntentSink((intent) => void settingsRepo.saveControlIntent(intent));
+  const savedIntent = await settingsRepo.getControlIntent();
+  if (savedIntent) {
+    state.restoreIntent(savedIntent.mode, savedIntent.manualRpm);
+    logger.info(savedIntent, "restored control intent");
+  }
   const bridge = new BridgeConnection(config.BRIDGE_HOST, config.BRIDGE_PORT, config.PUMP_ADDRESS);
   const queue = new CommandQueue(bridge);
   const engine = new Engine(state, queue, config.PUMP_ADDRESS, keepAliveMs);

@@ -7,7 +7,7 @@ export function FailsafeBanner() {
   const connected = useStore((s) => s.connected);
   const mode = control?.controlMode ?? "off";
   const label =
-    mode === "manual" ? "Manual override" : mode === "schedule" ? "On app schedule" : "Pump-managed";
+    mode === "manual" ? "Manual override" : mode === "schedule" ? "On app schedule" : "On pump schedule";
   return (
     <div className="glass flex items-start gap-3 rounded-2xl px-4 py-3">
       <div className="mt-0.5 text-aqua">

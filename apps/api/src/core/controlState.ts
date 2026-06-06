@@ -6,7 +6,7 @@ import type { PumpStatus } from "@pool/protocol";
  * Lives independent of the DB so the control loop keeps working if Postgres dies.
  */
 export class ControlState {
-  controlMode: ControlMode = "off";
+  controlMode: ControlMode = "schedule";
   /** RPM requested by a manual override. */
   manualRpm = 0;
   /** RPM computed by the scheduler for the current time. */
@@ -23,6 +23,7 @@ export class ControlState {
   lastUpdate = Date.now();
 
   private changeCbs: Array<() => void> = [];
+  private intentSink: ((i: { mode: ControlMode; manualRpm: number }) => void) | null = null;
 
   onChange(cb: () => void): void {
     this.changeCbs.push(cb);
@@ -31,6 +32,15 @@ export class ControlState {
   private notify(): void {
     this.lastUpdate = Date.now();
     for (const cb of this.changeCbs) cb();
+  }
+
+  /** Sink for durable control intent (mode + manual setpoint), persisted across restarts. */
+  setIntentSink(fn: (i: { mode: ControlMode; manualRpm: number }) => void): void {
+    this.intentSink = fn;
+  }
+
+  private emitIntent(): void {
+    this.intentSink?.({ mode: this.controlMode, manualRpm: this.manualRpm });
   }
 
   /** The RPM the engine should drive right now (0 = stop). */
@@ -45,16 +55,31 @@ export class ControlState {
     this.manualRpm = rpm;
     this.overrideUntil = durationMinutes ? Date.now() + durationMinutes * 60_000 : null;
     this.notify();
+    this.emitIntent();
   }
 
   resumeSchedule(): void {
     this.controlMode = "schedule";
     this.overrideUntil = null;
     this.notify();
+    this.emitIntent();
   }
 
   setOff(): void {
     this.controlMode = "off";
+    this.overrideUntil = null;
+    this.notify();
+    this.emitIntent();
+  }
+
+  /**
+   * Restore the persisted control intent on boot, so a restart/redeploy resumes
+   * what the user last selected (App Schedule, or the last manual speed) instead
+   * of defaulting to handing control back to the pump. Does not re-persist.
+   */
+  restoreIntent(mode: ControlMode, manualRpm: number): void {
+    this.controlMode = mode;
+    this.manualRpm = manualRpm;
     this.overrideUntil = null;
     this.notify();
   }
@@ -92,6 +117,7 @@ export class ControlState {
       this.controlMode = "schedule";
       this.overrideUntil = null;
       this.notify();
+      this.emitIntent();
       return true;
     }
     return false;

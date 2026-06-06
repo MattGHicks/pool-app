@@ -48,6 +48,8 @@ create table if not exists settings (
   updated_at            timestamptz not null default now()
 );
 insert into settings (id) values (1) on conflict (id) do nothing;
+alter table settings add column if not exists control_mode text not null default 'schedule';
+alter table settings add column if not exists manual_rpm   int  not null default 0;
 
 create table if not exists emporia_samples (
   ts          timestamptz not null,
