@@ -1,0 +1,19 @@
+name: Public reachability probe
+
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe public reachability
+        run: |
+          for url in \
+            "https://pool.mght630.com/" \
+            "https://poolapi.mght630.com/healthz" \
+            "https://coolify.mght630.com/" \
+            "https://coolify.mght630.com/api/v1/deploy?uuid=x" ; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "$url" 2>/dev/null || echo "TIMEOUT")
+            echo "PROBE $url -> $code"
+          done
