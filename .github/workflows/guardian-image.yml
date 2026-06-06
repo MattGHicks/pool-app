@@ -1,0 +1,35 @@
+name: guardian-image
+
+# Builds the pump-guardian image and publishes it to GHCR so it can be deployed
+# from a prebuilt image (e.g. pasted into Coolify's Docker Compose editor) without
+# needing the repo or a build context on the host.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/guardian/**"
+      - "packages/protocol/**"
+      - ".github/workflows/guardian-image.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-push:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/guardian/Dockerfile
+          push: true
+          tags: ghcr.io/mattghicks/pool-app-guardian:latest
