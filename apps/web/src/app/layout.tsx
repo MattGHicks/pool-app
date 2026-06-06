@@ -12,12 +12,29 @@ const chakra = Chakra_Petch({
 const outfit = Outfit({ subsets: ["latin"], variable: "--font-outfit" });
 const jbmono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-jbmono" });
 
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://pool.mght630.com";
+const TITLE = "PoolPilot";
+const DESCRIPTION = "Control and monitor the Hicks pool pump";
+
 export const metadata: Metadata = {
-  title: "PoolPilot",
-  description: "Control and monitor the Hicks pool pump",
+  metadataBase: new URL(SITE_URL),
+  title: TITLE,
+  description: DESCRIPTION,
   manifest: "/manifest.webmanifest",
-  appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "PoolPilot" },
+  appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: TITLE },
   icons: { icon: "/icon.svg", apple: "/icon.svg" },
+  openGraph: {
+    type: "website",
+    siteName: TITLE,
+    title: TITLE,
+    description: DESCRIPTION,
+    url: "/",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: TITLE,
+    description: DESCRIPTION,
+  },
 };
 
 export const viewport: Viewport = {

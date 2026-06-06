@@ -71,9 +71,11 @@ Set `KEEP_ALIVE_MS` to the recommended value in Coolify (or `.env`) and redeploy
 
 ## 5. Failsafe drills (prove the safety net)
 
-- `docker stop pool-api` → within the revert window the pump returns to its **onboard keypad schedule**.
-- Redeploy pool-api → it sends a graceful release first (clean handoff), then resumes control.
+- `docker stop pool-api` → within the revert window (~3·`KEEP_ALIVE_MS`) the pump returns to its **onboard keypad schedule**.
+- Redeploy pool-api → by default it just stops the keep-alive and the pump **holds its speed** across the container swap; the new instance re-asserts control before the pump times out, so the pump never stops or faults. (If the swap takes longer than the revert window, the pump safely falls back to its onboard schedule.) Set `RELEASE_ON_SHUTDOWN=true` to instead force an immediate handoff to the onboard schedule on every shutdown.
 - Unplug the bridge briefly → pool-api auto-reconnects and resumes the override.
+
+> **Seamless redeploys:** the no-command window must be shorter than the pump's revert timeout. This holds when the deploy **builds the new image while the old container keeps running**, then swaps (a few seconds). If your platform stops the old container *before* building (a multi-minute gap), the pump will revert to its onboard schedule regardless — so make sure the **onboard keypad schedule covers your run hours** as the baseline.
 
 ## Notes
 - DNS: `pool.mght630.com` + `poolapi.mght630.com` resolve via the existing `*.mght630.com` wildcard — no new records.

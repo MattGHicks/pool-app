@@ -126,12 +126,21 @@ async function main(): Promise<void> {
   const shutdown = async (sig: string): Promise<void> => {
     if (shuttingDown) return;
     shuttingDown = true;
-    logger.info({ sig }, "shutting down — releasing pump to onboard schedule");
+    logger.info(
+      { sig, releaseOnShutdown: config.RELEASE_ON_SHUTDOWN },
+      config.RELEASE_ON_SHUTDOWN
+        ? "shutting down — releasing pump to onboard schedule"
+        : "shutting down — holding pump speed (relies on keep-alive timeout)",
+    );
     clearInterval(healthTimer);
     poller.stop();
     scheduler.stop();
     engine.stop();
-    await engine.release(); // graceful handoff to the pump's onboard schedule
+    // By default we DON'T force a handoff: stopping the keep-alive lets the pump
+    // hold its current speed and revert on its own ~3·KEEP_ALIVE_MS timeout, so a
+    // quick redeploy is seamless. RELEASE_ON_SHUTDOWN=true restores the immediate,
+    // explicit handoff to the onboard schedule.
+    if (config.RELEASE_ON_SHUTDOWN) await engine.release();
     await telemetryRepo.flush();
     telemetryRepo.stopFlusher();
     bridge.close();
