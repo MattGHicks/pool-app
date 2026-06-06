@@ -1,0 +1,32 @@
+# pool-guardian — deploy as its OWN Coolify resource (separate from the app stack)
+# so that redeploying pool-api never restarts the guardian. The guardian holds the
+# persistent connection to the ESP32 and bridges the pump across app downtime.
+#
+#   docker compose -f docker-compose.guardian.yml up -d --build
+#
+# After it's up, point pool-api at it: set BRIDGE_HOST to this container's address
+# (e.g. the host IP or, on the shared coolify network, the service name) and
+# BRIDGE_PORT=8899, then redeploy pool-api.
+services:
+  pool-guardian:
+    build:
+      context: .
+      dockerfile: apps/guardian/Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 8899
+      UPSTREAM_HOST: 192.168.4.60
+      UPSTREAM_PORT: 8899
+      PUMP_ADDRESS: 96
+      KEEP_ALIVE_MS: ${KEEP_ALIVE_MS:-5000}
+      FAILOVER_MAX_MS: ${FAILOVER_MAX_MS:-300000}
+    # Published so pool-api (and the calibrate script) can reach it. If pool-api
+    # shares the coolify network, it can instead use the service name + port 8899.
+    ports:
+      - "8899:8899"
+    networks: [coolify]
+
+networks:
+  coolify:
+    external: true

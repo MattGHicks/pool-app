@@ -77,6 +77,28 @@ Set `KEEP_ALIVE_MS` to the recommended value in Coolify (or `.env`) and redeploy
 
 > **Seamless redeploys:** the no-command window must be shorter than the pump's revert timeout. This holds when the deploy **builds the new image while the old container keeps running**, then swaps (a few seconds). If your platform stops the old container *before* building (a multi-minute gap), the pump will revert to its onboard schedule regardless — so make sure the **onboard keypad schedule covers your run hours** as the baseline.
 
+## 6. (Optional) pump-guardian — make app downtime invisible to the pump
+
+The `pool-guardian` service removes the redeploy gap entirely. It sits between `pool-api`
+and the ESP32 (`pool-api → guardian → ESP32`), holds the persistent ESP32 connection, and
+when `pool-api` disconnects mid-run it keeps re-asserting the last setpoint for up to 5 min
+(then releases to the onboard schedule). See `apps/guardian/README.md` for behaviour.
+
+**It must be its own Coolify resource, separate from the app stack** — otherwise an app
+redeploy restarts it too and defeats the purpose.
+
+```bash
+# Deploy the guardian (separate resource / compose project):
+docker compose -f docker-compose.guardian.yml up -d --build
+
+# Then point pool-api at it and redeploy pool-api:
+#   BRIDGE_HOST = <guardian host or service name>   BRIDGE_PORT = 8899
+```
+
+Drills: with the guardian in front, `docker restart pool-api` (or a redeploy) should not
+disturb the pump at all; killing the **guardian** for >~15 s falls back to the pump's onboard
+schedule (the pump's own watchdog), same as the no-guardian baseline.
+
 ## Notes
 - DNS: `pool.mght630.com` + `poolapi.mght630.com` resolve via the existing `*.mght630.com` wildcard — no new records.
 - The session cookie uses `Domain=.mght630.com` so login on `pool.` is honored by `poolapi.`.
