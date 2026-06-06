@@ -72,9 +72,14 @@ export class Scheduler {
     this.tick();
   }
 
-  /** Begin periodic re-evaluation. Call `refresh()` once first to prime the setpoint. */
+  /**
+   * Begin periodic re-evaluation. Each interval **reloads from the DB** (not just
+   * recompute from cache), so the cached schedule set self-heals after a transient
+   * load failure on boot — otherwise the pump can sit off until someone re-saves a
+   * preset. Call `refresh()` once first to prime the setpoint immediately.
+   */
   start(): void {
-    this.timer = setInterval(() => this.tick(), 30_000);
+    this.timer = setInterval(() => void this.refresh(), 30_000);
   }
 
   stop(): void {
