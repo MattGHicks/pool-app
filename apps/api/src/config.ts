@@ -14,6 +14,10 @@ const EnvSchema = z.object({
   DB_USER: z.string().default("pool"),
   DB_PASSWORD: z.string().optional(),
   DB_NAME: z.string().default("pool"),
+  // Timezone the schedules are evaluated in. The container runs in UTC, but
+  // users set schedule times in their local wall clock — this keeps the two
+  // in sync so the pump runs at the right hour. Matt is Eastern.
+  POOL_TZ: z.string().default("America/New_York"),
   POLL_MS: z.coerce.number().int().min(250).default(1000),
   KEEP_ALIVE_MS: z.coerce.number().int().min(1000).default(5000),
   SESSION_SECRET: z.string().min(16).default("dev-only-insecure-secret-change-me-now"),

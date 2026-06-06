@@ -12,9 +12,27 @@ function toMinutes(hhmm: string): number {
  * start <= now applies (wrapping: before the first start, the last segment of
  * the day carries over). Returns 0 if nothing applies.
  */
-export function activeRpm(schedules: Schedule[], now: Date): number {
-  const day = now.getDay();
-  const minutes = now.getHours() * 60 + now.getMinutes();
+/** Day-of-week (0-6) + minute-of-day for `now`, evaluated in the given IANA
+ *  timezone — so schedules run on the user's wall clock even though the
+ *  container's own clock is UTC. */
+function tzDayMinutes(now: Date, tz: string): { day: number; minutes: number } {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    weekday: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(now);
+  const get = (t: string): string => parts.find((p) => p.type === t)?.value ?? "";
+  const DAYS: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+  const hour = Number(get("hour")) % 24; // some locales emit "24" at midnight
+  return { day: DAYS[get("weekday")] ?? 0, minutes: hour * 60 + Number(get("minute")) };
+}
+
+export function activeRpm(schedules: Schedule[], now: Date, tz?: string): number {
+  const { day, minutes } = tz
+    ? tzDayMinutes(now, tz)
+    : { day: now.getDay(), minutes: now.getHours() * 60 + now.getMinutes() };
   const candidates = schedules
     .filter((s) => s.enabled && s.daysOfWeek.includes(day))
     .sort((a, b) => b.priority - a.priority);
@@ -37,6 +55,7 @@ export class Scheduler {
   constructor(
     private readonly state: ControlState,
     private readonly load: () => Promise<Schedule[]>,
+    private readonly tz: string,
   ) {}
 
   setSchedules(schedules: Schedule[]): void {
@@ -67,6 +86,6 @@ export class Scheduler {
 
   tick(): void {
     this.state.setScheduleActive(this.schedules.some((s) => s.enabled));
-    this.state.setScheduledRpm(activeRpm(this.schedules, new Date()));
+    this.state.setScheduledRpm(activeRpm(this.schedules, new Date(), this.tz));
   }
 }

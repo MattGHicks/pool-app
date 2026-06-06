@@ -44,7 +44,7 @@ async function main(): Promise<void> {
   const queue = new CommandQueue(bridge);
   const engine = new Engine(state, queue, config.PUMP_ADDRESS, keepAliveMs);
   const poller = new Poller(queue, config.PUMP_ADDRESS, pollMs);
-  const scheduler = new Scheduler(state, schedulesRepo.listSchedules);
+  const scheduler = new Scheduler(state, schedulesRepo.listSchedules, config.POOL_TZ);
   const watchdog = new Watchdog(state, bridge, () => keepAliveMs, isDbConnected);
 
   const app = Fastify({ logger: false });
