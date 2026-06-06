@@ -22,7 +22,7 @@ const STARTERS: ScheduleInput[] = [
     priority: 0,
   },
   {
-    name: "Active",
+    name: "Summer",
     enabled: false,
     segments: [
       { start: "00:00", rpm: 0 },
@@ -163,13 +163,12 @@ export default function SchedulePage() {
     }
     setBusy(false);
   };
-  const activate = async (): Promise<void> => {
-    if (!selectedId) return;
+  const activate = async (id: string): Promise<void> => {
     haptics.toggle();
     setBusy(true);
     try {
-      await api.activateSchedule(selectedId);
-      await load(selectedId);
+      await api.activateSchedule(id);
+      await load(id);
     } catch {
       /* offline */
     }
@@ -199,14 +198,15 @@ export default function SchedulePage() {
         <div className="flex items-center justify-between">
           <span className="font-display text-sm">{name || "—"}</span>
           <span className="font-mono text-[0.6rem] text-text-faint">
-            {isActive ? "ACTIVE · " : ""}
+            {isActive ? "RUNNING · " : ""}
             {runtimeHours(segs).toFixed(1)} h/day
           </span>
         </div>
         <ScheduleTimeline segments={segs} nowMinutes={now} />
         <p className="text-[0.7rem] leading-relaxed text-text-faint">
-          The active preset runs when you tap <span className="text-aqua">Schedule</span> on the home
-          screen. Tap a preset to load it, edit its segments below, then Save.
+          The preset marked <span className="text-aqua">Running</span> plays when you tap{" "}
+          <span className="text-aqua">Schedule</span> on the home screen. Tap a preset to edit it, or hit{" "}
+          <span className="text-aqua">Use</span> to run it.
         </p>
       </Card>
 
@@ -221,28 +221,45 @@ export default function SchedulePage() {
         </button>
       </div>
       <div className="grid gap-2.5">
-        {schedules.map((p) => (
-          <button
-            key={p.id}
-            onClick={() => pick(p)}
-            className={`glass rounded-2xl p-3 text-left transition active:scale-[0.99] ${
-              p.id === selectedId ? "ring-1 ring-aqua/60" : ""
-            }`}
-          >
-            <div className="mb-2 flex items-center justify-between">
-              <span className="flex items-center gap-2 font-display text-sm">
+        {schedules.map((p) => {
+          const sel = p.id === selectedId;
+          return (
+            <div
+              key={p.id}
+              onClick={() => pick(p)}
+              className={`glass cursor-pointer rounded-2xl p-3 transition active:scale-[0.99] ${
+                sel ? "ring-1 ring-aqua/60" : ""
+              }`}
+            >
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <span className="min-w-0 truncate font-display text-sm">
+                  {p.name}
+                  <span className="ml-2 font-mono text-[0.56rem] text-text-faint">
+                    {runtimeHours(p.segments).toFixed(1)}h
+                  </span>
+                </span>
                 {p.enabled ? (
-                  <span className="h-1.5 w-1.5 rounded-full bg-aqua shadow-[0_0_6px_var(--color-aqua)]" />
-                ) : null}
-                {p.name}
-              </span>
-              <span className="font-mono text-[0.6rem] text-text-faint">
-                {p.enabled ? "ACTIVE" : `${runtimeHours(p.segments).toFixed(1)}h`}
-              </span>
+                  <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-aqua/15 px-2 py-1 font-mono text-[0.52rem] tracking-wide text-aqua">
+                    <span className="h-1.5 w-1.5 rounded-full bg-aqua shadow-[0_0_6px_var(--color-aqua)]" />
+                    RUNNING
+                  </span>
+                ) : (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void activate(p.id);
+                    }}
+                    disabled={busy}
+                    className="shrink-0 rounded-lg border border-aqua/50 bg-aqua/10 px-3.5 py-1 font-mono text-[0.62rem] text-aqua active:bg-aqua/20 disabled:opacity-50"
+                  >
+                    Use
+                  </button>
+                )}
+              </div>
+              <ScheduleTimeline segments={p.segments} height={28} />
             </div>
-            <ScheduleTimeline segments={p.segments} height={28} />
-          </button>
-        ))}
+          );
+        })}
       </div>
 
       {/* Segments editor */}
@@ -310,22 +327,13 @@ export default function SchedulePage() {
       </Card>
 
       {/* Actions */}
-      <div className="grid grid-cols-2 gap-2.5">
-        <button
-          onClick={() => void save()}
-          disabled={busy}
-          className="rounded-xl border border-aqua/60 bg-aqua/10 py-3 text-sm text-aqua transition active:bg-aqua/20 disabled:opacity-50"
-        >
-          {selectedId ? "Save changes" : "Create preset"}
-        </button>
-        <button
-          onClick={() => void activate()}
-          disabled={busy || !selectedId || isActive}
-          className="rounded-xl border border-border bg-surface/50 py-3 text-sm text-text transition active:bg-surface-2/60 disabled:opacity-40"
-        >
-          {isActive ? "✓ Active" : "Set active"}
-        </button>
-      </div>
+      <button
+        onClick={() => void save()}
+        disabled={busy}
+        className="w-full rounded-xl border border-aqua/60 bg-aqua/10 py-3 text-sm text-aqua transition active:bg-aqua/20 disabled:opacity-50"
+      >
+        {selectedId ? "Save changes" : "Create preset"}
+      </button>
       {selectedId ? (
         <button
           onClick={() => void remove()}
