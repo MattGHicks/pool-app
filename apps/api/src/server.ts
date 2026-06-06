@@ -114,8 +114,14 @@ async function main(): Promise<void> {
   const healthTimer = setInterval(() => broadcaster.health(watchdog.health()), 5000);
 
   telemetryRepo.startFlusher();
-  bridge.start();
+  bridge.start(); // kick off the pump connection immediately; the TCP connect overlaps the load below
   poller.start();
+  // Prime the scheduled setpoint BEFORE the engine sends its first command. Otherwise a
+  // schedule-mode boot commands while scheduleActive is still false, which makes the engine
+  // briefly RELEASE the pump to its onboard schedule (a remoteControl(false) blip) and only
+  // re-asserts the real RPM once schedules finish loading. On a redeploy that blip shows up
+  // as the pump dropping to "Auto"/"SEr"; priming first lets it re-grab control cleanly.
+  await scheduler.refresh();
   engine.start();
   scheduler.start();
 
