@@ -1,0 +1,89 @@
+# poolbridge.yaml — ESP32 transparent RS-485 <-> TCP bridge for nodejs-poolController
+#
+# Bridges the Pentair SuperFlo VST RS-485 bus (9600 8N1) over WiFi so njsPC (on the T630)
+# can reach it via POOL_NET_CONNECT / POOL_NET_HOST / POOL_NET_PORT.
+#
+# Uses the oxan/esphome-stream-server external component. VERIFY the current option names
+# against its README before flashing — the component's schema occasionally changes:
+#   https://github.com/oxan/esphome-stream-server
+#
+# Flash:  cp secrets.yaml.example secrets.yaml  (edit it)  &&  esphome run poolbridge.yaml
+
+esphome:
+  name: poolbridge
+  friendly_name: Pool RS485 Bridge
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf   # stream_server needs the ESP-IDF UART (IDFUARTComponent); arduino won't link
+
+# ---------------------------------------------------------------------------
+# Connectivity
+# ---------------------------------------------------------------------------
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  # Fixed IP so njsPC always finds the bridge. Pick a free address on the LAN at the pad,
+  # or set a DHCP reservation instead and delete this block.
+  manual_ip:
+    static_ip: 192.168.4.60
+    gateway: 192.168.4.1
+    subnet: 255.255.255.0
+  # Fallback hotspot if WiFi is unavailable (useful during first setup at the pad).
+  ap:
+    ssid: "Poolbridge Fallback"
+    password: !secret ap_password
+
+# Logger runs on UART0 (the USB pins GPIO1/3). The RS-485 UART below is on
+# GPIO16/17 (UART2), so they do NOT conflict — keep USB logs for debugging.
+# (If you ever want it silent, set: baud_rate: 0)
+logger:
+  level: DEBUG
+  hardware_uart: UART0
+
+api:
+  encryption:
+    key: !secret api_key
+
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+# ---------------------------------------------------------------------------
+# RS-485 UART  (Pentair = 9600 baud, 8N1)
+# ---------------------------------------------------------------------------
+uart:
+  id: uart_bus
+  tx_pin: GPIO25   # -> DI  (driver input) on the MAX485. Moved off GPIO16/17 (dead on this board).
+  rx_pin: GPIO26   # <- RO  (receiver output) on the MAX485. Unused for now (RO left unwired).
+  baud_rate: 9600
+  # Blue MAX485 module (explicit DE/RE). ESPHome drives DE high during TX via this pin;
+  # RE is tied to GND on the board (receiver always enabled, harmless since RO is unwired).
+  flow_control_pin: GPIO27   # -> DE (transmit-enable). THE FIX vs the old auto-direction module.
+  # TEMP DEBUG: log every byte the UART sends/receives, to verify the bridge forwards.
+  debug:
+    direction: BOTH
+    dummy_receiver: false
+    after:
+      bytes: 64
+      timeout: 40ms
+    sequence:
+      - lambda: UARTDebug::log_hex(direction, bytes, ',');
+
+external_components:
+  - source: github://oxan/esphome-stream-server
+    components: [stream_server]
+
+# ---------------------------------------------------------------------------
+# Expose the UART over TCP for njsPC. Port must match POOL_NET_PORT in docker-compose.yml.
+# ---------------------------------------------------------------------------
+stream_server:
+  uart_id: uart_bus
+  port: 8899
+
+# Optional heartbeat in the ESPHome/HA view (safe to delete if the schema differs).
+# binary_sensor:
+#   - platform: stream_server
+#     connected:
+#       name: "Pool bridge client connected"

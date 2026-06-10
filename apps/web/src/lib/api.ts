@@ -7,10 +7,12 @@ import type {
   EnergySeriesDTO,
   SpeedDistDTO,
 } from "@pool/types";
+import { DEMO, demoRequest } from "./demo";
 
 export const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
+  if (DEMO) return demoRequest<T>(path, init);
   // Only send a JSON content-type when there's actually a body — Fastify rejects
   // an empty body with content-type: application/json (FST_ERR_CTP_EMPTY_JSON_BODY),
   // which silently broke every no-body POST (activate, resume-schedule, off, logout).

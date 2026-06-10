@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Card } from "@/components/ui";
 import { ScheduleTimeline } from "@/components/ScheduleTimeline";
 import { api } from "@/lib/api";
+import { useStore } from "@/lib/store";
 import { rpmAt, runtimeHours } from "@/lib/schedule";
 import type { Schedule } from "@pool/types";
 
@@ -12,7 +13,10 @@ import type { Schedule } from "@pool/types";
 export function ActiveScheduleCard() {
   const [sched, setSched] = useState<Schedule | null>(null);
   const [loaded, setLoaded] = useState(false);
-  const [now, setNow] = useState(0);
+  const [deviceNow, setDeviceNow] = useState(0);
+  // The schedule runs on the pump's clock, so judge "now" by it when we have it.
+  const pumpNow = useStore((s) => s.telemetry?.clockMinutes ?? null);
+  const now = pumpNow ?? deviceNow;
 
   useEffect(() => {
     api
@@ -22,7 +26,7 @@ export function ActiveScheduleCard() {
       .finally(() => setLoaded(true));
     const tick = (): void => {
       const d = new Date();
-      setNow(d.getHours() * 60 + d.getMinutes());
+      setDeviceNow(d.getHours() * 60 + d.getMinutes());
     };
     tick();
     const t = setInterval(tick, 30_000);

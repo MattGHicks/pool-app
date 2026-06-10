@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { Card, SectionTitle } from "@/components/ui";
 import { ScheduleTimeline } from "@/components/ScheduleTimeline";
 import { api } from "@/lib/api";
+import { useStore } from "@/lib/store";
 import { sortSegments, runtimeHours, rpmColor } from "@/lib/schedule";
 import { haptics } from "@/lib/haptics";
 import type { Schedule, ScheduleSegment, ScheduleInput } from "@pool/types";
@@ -61,7 +62,10 @@ export default function SchedulePage() {
   const [name, setName] = useState("Maintenance");
   const [segs, setSegs] = useState<ScheduleSegment[]>(DEFAULT_SEGS);
   const [busy, setBusy] = useState(false);
-  const [now, setNow] = useState(0);
+  const [deviceNow, setDeviceNow] = useState(0);
+  // The schedule runs on the pump's clock, so judge "now" by it when we have it.
+  const pumpNow = useStore((s) => s.telemetry?.clockMinutes ?? null);
+  const now = pumpNow ?? deviceNow;
   const seeded = useRef(false);
 
   const selected = schedules.find((s) => s.id === selectedId) ?? null;
@@ -71,7 +75,7 @@ export default function SchedulePage() {
   useEffect(() => {
     const tick = (): void => {
       const d = new Date();
-      setNow(d.getHours() * 60 + d.getMinutes());
+      setDeviceNow(d.getHours() * 60 + d.getMinutes());
     };
     tick();
     const t = setInterval(tick, 30_000);

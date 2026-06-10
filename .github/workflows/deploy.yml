@@ -16,5 +16,5 @@ jobs:
       - name: Trigger Coolify deployment
         run: |
           curl --fail-with-body -sS \
-            "http://localhost:8000/api/v1/deploy?uuid=wocw4w0swk4cws8k8gws4k88&force=false" \
+            "http://localhost:8000/api/v1/deploy?uuid=${{ vars.COOLIFY_APP_UUID }}&force=false" \
             -H "Authorization: Bearer ${{ secrets.COOLIFY_TOKEN }}"

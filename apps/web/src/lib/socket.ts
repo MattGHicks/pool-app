@@ -3,6 +3,7 @@ import { io, type Socket } from "socket.io-client";
 import type { TelemetryDTO, ControlStateDTO, HealthDTO, ControlMode } from "@pool/types";
 import { useStore } from "./store";
 import { API_BASE } from "./api";
+import { DEMO } from "./demo";
 import { calibratedWatts, estGpm } from "./curves";
 
 let liveSocket: Socket | null = null;
@@ -10,8 +11,14 @@ let demoTimer: ReturnType<typeof setInterval> | null = null;
 let demoTarget = 1500;
 let demoMode: ControlMode = "schedule";
 let failures = 0;
+const demoBoot = Date.now();
 
 export function connectSockets(): void {
+  if (DEMO) {
+    // Demo build: no backend at all — run the simulator as a healthy system.
+    startDemo();
+    return;
+  }
   if (liveSocket) return;
   liveSocket = io(`${API_BASE}/live`, {
     withCredentials: true,
@@ -49,7 +56,8 @@ export function isDemo(): boolean {
 
 function startDemo(): void {
   if (demoTimer) return;
-  useStore.getState().setConnected(false);
+  // True demo build = simulated-but-healthy; socket-failure fallback = honest offline.
+  useStore.getState().setConnected(DEMO);
   demoTimer = setInterval(() => {
     const t = demoMode === "off" ? 0 : demoTarget;
     const wob = Math.sin(Date.now() / 2400) * 0.008 + (Math.random() - 0.5) * 0.01;
@@ -66,17 +74,28 @@ function startDemo(): void {
       statusText: "Ok",
       estGpm: estGpm(t),
       dollarsPerHour: (watts / 1000) * 0.205,
-      clockMinutes: now.getHours() * 60 + now.getMinutes(),
+      // Demo pins the pump clock to 9:41 so screenshots are deterministic.
+      clockMinutes: DEMO ? 9 * 60 + 41 : now.getHours() * 60 + now.getMinutes(),
     };
     useStore.getState().pushTelemetry(tel);
     useStore.getState().setControl({
       controlMode: demoMode,
       targetRpm: t,
       overrideUntil: null,
-      busConnected: false,
+      busConnected: DEMO,
       lastError: null,
       lastUpdate: Date.now(),
     });
+    if (DEMO) {
+      useStore.getState().setHealth({
+        busConnected: true,
+        lastPollAgeMs: 900,
+        controlMode: demoMode,
+        uptimeS: 259_200 + Math.round((Date.now() - demoBoot) / 1000),
+        dbConnected: true,
+        keepAliveMs: 5000,
+      });
+    }
   }, 1000);
 }
 
