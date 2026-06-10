@@ -96,6 +96,15 @@ body::before {
   -webkit-backdrop-filter: blur(14px);
 }
 
+/* denser frost for the floating bottom nav — it hovers over bright glowing
+   gauges, so it needs more opacity + blur than a regular card to stay legible */
+.glass-nav {
+  background: linear-gradient(160deg, rgba(16, 30, 42, 0.92), rgba(9, 17, 25, 0.88));
+  backdrop-filter: blur(28px) saturate(1.4);
+  -webkit-backdrop-filter: blur(28px) saturate(1.4);
+  border: 1px solid var(--color-border);
+}
+
 .text-balance {
   text-wrap: balance;
 }

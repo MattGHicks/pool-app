@@ -14,7 +14,7 @@ export function BottomNav() {
   const path = usePathname();
   return (
     <nav className="fixed inset-x-0 bottom-0 z-30 mx-auto max-w-md px-4 pb-[max(0.7rem,env(safe-area-inset-bottom))]">
-      <div className="glass flex items-center justify-around rounded-2xl px-1 py-2">
+      <div className="glass-nav flex items-center justify-around rounded-2xl px-1 py-2">
         {TABS.map(({ href, label, Icon }) => {
           const active = href === "/" ? path === "/" : path.startsWith(href);
           return (
