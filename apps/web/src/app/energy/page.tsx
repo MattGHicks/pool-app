@@ -10,9 +10,15 @@ import { calibratedWatts, estGpm } from "@/lib/curves";
 import type { EnergySummaryDTO, EnergyBucketDTO } from "@pool/types";
 
 const DEMO = process.env.NEXT_PUBLIC_DEMO === "1";
-const RATE = 0.205;
-const POOL_GAL = 8500;
-const WEF = 9000;
+/**
+ * Fallbacks only — the live values come from the server's settings so that
+ * editing the rate (or pool size) in Settings actually moves every number on
+ * this page. These constants used to be the source of truth here, which meant a
+ * changed rate silently applied to the summary but not to the live $/hr readout.
+ */
+const FALLBACK_RATE = 0.205;
+const FALLBACK_POOL_GAL = 8500;
+const WEF = 9000; // demo-mode synthesis only; real gallons are measured from flow
 const TURNOVER_TARGET = 1.5; // turnovers/day for a healthy pool
 
 type RangeKey = "today" | "7d" | "30d";
@@ -58,7 +64,7 @@ function pickLabels(buckets: EnergyBucketDTO[], res: "hour" | "day"): string[] {
 interface Loaded {
   summary: EnergySummaryDTO;
   buckets: EnergyBucketDTO[];
-  bands: Array<{ band: string; samples: number }>;
+  bands: Array<{ band: string; seconds: number }>;
 }
 
 function demoLoad(key: RangeKey): Loaded {
@@ -90,26 +96,30 @@ function demoLoad(key: RangeKey): Loaded {
   const hours = res === "hour" ? 1 : 24;
   const kwh = buckets.reduce((s, b) => s + (b.avgWatts / 1000) * hours, 0);
   const gallons = kwh * WEF;
-  const turnovers = gallons / POOL_GAL;
+  const turnovers = gallons / FALLBACK_POOL_GAL;
   return {
     summary: {
       from,
       to,
       kwh,
-      cost: kwh * RATE,
+      cost: kwh * FALLBACK_RATE,
       runtimeHours: buckets.reduce((s, b) => s + b.runFrac * hours, 0),
       turnovers,
       efficiencyPct: (1 - Math.exp(-turnovers)) * 100,
       avgWatts: buckets.reduce((s, b) => s + b.avgWatts, 0) / buckets.length,
       peakWatts: Math.max(...buckets.map((b) => b.maxWatts), 0),
       gallons,
+      galPerKwh: kwh > 0 ? gallons / kwh : 0,
+      projectedMonthlyCost: (kwh / Math.max(1, key === "today" ? 1 : key === "7d" ? 7 : 30)) * FALLBACK_RATE * 30,
+      turnoversPerDay: turnovers / Math.max(1, key === "today" ? 1 : key === "7d" ? 7 : 30),
+      projectionDays: key === "today" ? 1 : key === "7d" ? 7 : 30,
     },
     buckets,
     bands: [
-      { band: "off", samples: 52_000 },
-      { band: "low", samples: 30_000 },
-      { band: "mid", samples: 9_000 },
-      { band: "high", samples: 1_200 },
+      { band: "off", seconds: 50_400 },
+      { band: "low", seconds: 27_000 },
+      { band: "mid", seconds: 7_200 },
+      { band: "high", seconds: 1_800 },
     ],
   };
 }
@@ -119,8 +129,24 @@ export default function EnergyPage() {
   const history = useStore((s) => s.history);
   const [range, setRange] = useState<RangeKey>("today");
   const [data, setData] = useState<Loaded | null>(null);
+  const [rate, setRate] = useState(FALLBACK_RATE);
   const [confirmingReset, setConfirmingReset] = useState(false);
   const [resetting, setResetting] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .settings()
+      .then((s) => {
+        if (!cancelled) setRate(s.ratePerKwh);
+      })
+      .catch(() => {
+        /* keep the fallback rate */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const load = useCallback((): (() => void) => {
     let cancelled = false;
@@ -165,11 +191,15 @@ export default function EnergyPage() {
   const nowFrac = range === "today" ? (new Date().getHours() * 60 + new Date().getMinutes()) / 1440 : undefined;
 
   const liveW = tel?.watts ?? 0;
-  const bandSec = (k: string): number => (data?.bands.find((b) => b.band === k)?.samples ?? 0);
+  const bandSec = (k: string): number => (data?.bands.find((b) => b.band === k)?.seconds ?? 0);
   const bandTotal = BANDS.reduce((t, b) => t + bandSec(b.key), 0) || 1;
 
-  const projMonth = s ? (range === "today" ? s.cost * 30 : (s.cost / (range === "7d" ? 7 : 30)) * 30) : 0;
-  const turnPerDay = s ? (range === "today" ? s.turnovers : s.turnovers / (range === "7d" ? 7 : 30)) : 0;
+  // Both come from the server's trailing complete days, so they read the same at
+  // 9am and at 11pm. Scaling the selected range instead meant "Today" projected
+  // from however much of the day had elapsed.
+  const projMonth = s?.projectedMonthlyCost ?? 0;
+  const turnPerDay = s?.turnoversPerDay ?? 0;
+  const projectionDays = s?.projectionDays ?? 0;
 
   return (
     <div className="space-y-4 pt-1">
@@ -211,7 +241,7 @@ export default function EnergyPage() {
             <span className="text-text-faint">gpm</span>
           </span>
           <span>
-            <span className="text-text">{fmtDollars((liveW / 1000) * RATE)}</span>
+            <span className="text-text">{fmtDollars((liveW / 1000) * rate)}</span>
             <span className="text-text-faint">/hr</span>
           </span>
         </div>
@@ -229,7 +259,7 @@ export default function EnergyPage() {
           <Stat label="Runtime" value={(s?.runtimeHours ?? 0).toFixed(1)} unit="h" />
         </Card>
         <Card className="py-4">
-          <Stat label="Avg power" value={fmtWatts(s?.avgWatts ?? 0)} unit="W" />
+          <Stat label="Avg running" value={fmtWatts(s?.avgWatts ?? 0)} unit="W" />
         </Card>
         <Card className="py-4">
           <Stat label="Peak" value={fmtWatts(s?.peakWatts ?? 0)} unit="W" color="var(--color-amber)" />
@@ -306,7 +336,11 @@ export default function EnergyPage() {
         <Card className="space-y-1 p-4">
           <div className="text-[0.6rem] uppercase tracking-[0.18em] text-text-faint">Projected / month</div>
           <div className="font-display text-2xl text-aqua">{fmtDollars(projMonth)}</div>
-          <div className="font-mono text-[0.58rem] text-text-faint">at {fmtDollars(RATE)}/kWh</div>
+          <div className="font-mono text-[0.58rem] text-text-faint">
+            {projectionDays > 0
+              ? `from last ${projectionDays} full ${projectionDays === 1 ? "day" : "days"}`
+              : "not enough history yet"}
+          </div>
         </Card>
         <Card className="space-y-2 p-4">
           <div className="flex items-baseline justify-between">
@@ -334,7 +368,7 @@ export default function EnergyPage() {
 
       <Card className="flex items-center justify-between px-4 py-3.5 text-sm">
         <span className="text-text-dim">TECO blended rate</span>
-        <span className="font-mono text-text">{fmtDollars(RATE)} / kWh</span>
+        <span className="font-mono text-text">{fmtDollars(rate)} / kWh</span>
       </Card>
       <p className="px-1 pb-2 text-[0.62rem] leading-relaxed text-text-faint">
         Billing uses the panel meter (Emporia); the pump&apos;s RS-485 watts read a little lower than true

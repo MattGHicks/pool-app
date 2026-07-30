@@ -110,9 +110,23 @@ export const EnergySummaryDTO = z.object({
   runtimeHours: z.number(),
   turnovers: z.number(),
   efficiencyPct: z.number(),
+  /** Mean draw while the pump is actually running (not a 24 h average). */
   avgWatts: z.number().default(0),
+  /** True maximum instantaneous draw in the range. */
   peakWatts: z.number().default(0),
+  /** Measured from integrated flow, not derived from kWh via a fixed WEF. */
   gallons: z.number().default(0),
+  /** Actual water efficiency over the range (gal/kWh) — varies ~2.5x with speed. */
+  galPerKwh: z.number().default(0),
+  /**
+   * Projected monthly cost, always from the trailing complete days — never from a
+   * partial day, which would swing wildly as the day progresses.
+   */
+  projectedMonthlyCost: z.number().default(0),
+  /** Average turnovers per complete day — same stable basis as the cost projection. */
+  turnoversPerDay: z.number().default(0),
+  /** How many complete days the projection is based on (0 = not enough history). */
+  projectionDays: z.number().default(0),
 });
 export type EnergySummaryDTO = z.infer<typeof EnergySummaryDTO>;
 
@@ -134,9 +148,13 @@ export const EnergySeriesDTO = z.object({
 });
 export type EnergySeriesDTO = z.infer<typeof EnergySeriesDTO>;
 
-/** Time spent in each speed band (sample counts ≈ seconds at ~1 Hz). */
+/**
+ * Time spent in each speed band, in seconds. Measured by summing the interval
+ * between consecutive samples — NOT by counting rows, which double-counts the
+ * duplicate frames the bridge delivers and loses every gap in the stream.
+ */
 export const SpeedDistDTO = z.object({
-  bands: z.array(z.object({ band: z.string(), samples: z.number() })),
+  bands: z.array(z.object({ band: z.string(), seconds: z.number() })),
 });
 export type SpeedDistDTO = z.infer<typeof SpeedDistDTO>;
 
