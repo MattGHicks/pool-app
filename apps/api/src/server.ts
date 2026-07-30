@@ -40,7 +40,11 @@ async function main(): Promise<void> {
     state.restoreIntent(savedIntent.mode, savedIntent.manualRpm);
     logger.info(savedIntent, "restored control intent");
   }
-  const bridge = new BridgeConnection(config.BRIDGE_HOST, config.BRIDGE_PORT, config.PUMP_ADDRESS);
+  const bridge = new BridgeConnection(config.BRIDGE_HOST, config.BRIDGE_PORT, config.PUMP_ADDRESS, {
+    idleTimeoutMs: config.BRIDGE_IDLE_MS,
+    connectTimeoutMs: config.BRIDGE_CONNECT_TIMEOUT_MS,
+    writeTimeoutMs: config.BRIDGE_WRITE_TIMEOUT_MS,
+  });
   const queue = new CommandQueue(bridge);
   const engine = new Engine(state, queue, config.PUMP_ADDRESS, keepAliveMs);
   const poller = new Poller(queue, config.PUMP_ADDRESS, pollMs);
@@ -77,6 +81,12 @@ async function main(): Promise<void> {
   bridge.onDisconnected((reason) => {
     state.setBusConnected(false);
     void eventsRepo.logEvent("bus_drop", { reason }, "warn");
+  });
+  // A stall is the failure mode that used to be invisible: the socket stayed open
+  // while the pump quietly lost its keep-alive and reverted. Record it so the ramp
+  // down/up that follows has a trace to point at.
+  bridge.onStall((idleMs) => {
+    void eventsRepo.logEvent("bus_stall", { idleMs, keepAliveMs }, "warn");
   });
   bridge.onStatus((status) => {
     state.applyStatus(status);

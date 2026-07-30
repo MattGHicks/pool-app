@@ -20,6 +20,16 @@ const EnvSchema = z.object({
   POOL_TZ: z.string().default("America/New_York"),
   POLL_MS: z.coerce.number().int().min(250).default(1000),
   KEEP_ALIVE_MS: z.coerce.number().int().min(1000).default(5000),
+  // Liveness check on the bridge link. A stalled WiFi connection stays open at the
+  // TCP level, so "connected" is not evidence that commands are reaching the pump:
+  // without this the pump can sit unattended past its ~3·KEEP_ALIVE_MS revert
+  // window and drop to its onboard schedule with nothing logged anywhere.
+  // Chosen above the routine multi-second read gaps this link shows (checksum-
+  // rejected frames) but inside the revert window. Raise it if reconnects get
+  // chatty; lower it to react faster.
+  BRIDGE_IDLE_MS: z.coerce.number().int().min(2000).default(12_000),
+  BRIDGE_CONNECT_TIMEOUT_MS: z.coerce.number().int().min(1000).default(8000),
+  BRIDGE_WRITE_TIMEOUT_MS: z.coerce.number().int().min(500).default(3000),
   // On shutdown, whether to explicitly hand the pump back to its onboard schedule
   // (remoteControl(false)). Default false: we just stop the keep-alive and let the
   // pump hold its speed, reverting on its own ~3·KEEP_ALIVE_MS timeout. That makes a
