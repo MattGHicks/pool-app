@@ -21,6 +21,11 @@ services:
       PUMP_ADDRESS: 96
       KEEP_ALIVE_MS: ${KEEP_ALIVE_MS:-5000}
       FAILOVER_MAX_MS: ${FAILOVER_MAX_MS:-300000}
+      # Rebuild the ESP32 link if it stops carrying bytes. The app polls at 1 Hz, so a
+      # silent upstream is a dead one — and a dead-but-open socket means the pump is
+      # getting no keep-alive. Keep in step with pool-api's BRIDGE_IDLE_MS.
+      UPSTREAM_IDLE_MS: ${UPSTREAM_IDLE_MS:-12000}
+      UPSTREAM_CONNECT_TIMEOUT_MS: ${UPSTREAM_CONNECT_TIMEOUT_MS:-8000}
     # Published on the host for the calibrate script / debugging. pool-api reaches
     # the guardian over the shared coolify network via the `pool-guardian` alias
     # below (set BRIDGE_HOST=pool-guardian on pool-api).

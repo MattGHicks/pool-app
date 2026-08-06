@@ -5,7 +5,10 @@ import { Guardian } from "./guardian.js";
 import { UpstreamClient } from "./upstream.js";
 
 function main(): void {
-  const upstream = new UpstreamClient(config.UPSTREAM_HOST, config.UPSTREAM_PORT);
+  const upstream = new UpstreamClient(config.UPSTREAM_HOST, config.UPSTREAM_PORT, {
+    idleTimeoutMs: config.UPSTREAM_IDLE_MS,
+    connectTimeoutMs: config.UPSTREAM_CONNECT_TIMEOUT_MS,
+  });
   const guardian = new Guardian(
     upstream,
     {

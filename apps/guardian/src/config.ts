@@ -12,6 +12,13 @@ const EnvSchema = z.object({
   KEEP_ALIVE_MS: z.coerce.number().int().min(1000).default(5000),
   /** Max time to hold the pump after the app vanishes, then release to onboard. */
   FAILOVER_MAX_MS: z.coerce.number().int().min(10_000).default(300_000), // 5 min
+  /**
+   * Rebuild the ESP32 link if it produces nothing for this long. The app polls at
+   * 1 Hz, so a silent upstream is a dead one — and a dead-but-open socket means the
+   * pump is getting no keep-alive. Keep in step with pool-api's BRIDGE_IDLE_MS.
+   */
+  UPSTREAM_IDLE_MS: z.coerce.number().int().min(2000).default(12_000),
+  UPSTREAM_CONNECT_TIMEOUT_MS: z.coerce.number().int().min(1000).default(8000),
 });
 
 export const config = EnvSchema.parse(process.env);
