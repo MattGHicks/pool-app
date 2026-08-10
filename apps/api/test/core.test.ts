@@ -61,6 +61,35 @@ describe("energy", () => {
     expect(mid).toBeLessThan(34);
   });
 
+  it("tapers to zero below the first knot instead of clamping to it", () => {
+    // Regression: the old interpolate() returned the first knot's value for any
+    // input below it, so a barely-turning pump reported a full 22 GPM / 90 W.
+    expect(estGpm(700)).toBeLessThan(22);
+    expect(estGpm(700)).toBeGreaterThan(0);
+    expect(estGpm(1400)).toBe(22); // the knot itself is unchanged
+    expect(calibratedWatts(500)).toBeLessThan(90);
+    expect(calibratedWatts(1000)).toBe(90);
+
+    // Monotonic all the way down — no step at the first knot.
+    for (let rpm = 0; rpm < 1500; rpm += 100) {
+      expect(estGpm(rpm)).toBeLessThanOrEqual(estGpm(rpm + 100));
+      expect(calibratedWatts(rpm)).toBeLessThanOrEqual(calibratedWatts(rpm + 100));
+    }
+  });
+
+  it("reports the real water efficiency spread across the speed range", () => {
+    // The energy page used to assume a flat 9000 gal/kWh. It isn't flat: the
+    // whole point of a variable-speed pump is that slow is dramatically more
+    // efficient, so gallons must be measured from flow, not derived from kWh.
+    const galPerKwh = (rpm: number): number =>
+      (estGpm(rpm) * 60) / (calibratedWatts(rpm) / 1000);
+    expect(galPerKwh(1500)).toBeGreaterThan(9000);
+    expect(galPerKwh(3000)).toBeLessThan(5500);
+    // Efficiency must fall monotonically as speed rises.
+    expect(galPerKwh(1500)).toBeGreaterThan(galPerKwh(2400));
+    expect(galPerKwh(2400)).toBeGreaterThan(galPerKwh(3000));
+  });
+
   it("calibratedWatts matches the measured 160 W at 1500 RPM", () => {
     expect(calibratedWatts(1500)).toBe(160);
   });

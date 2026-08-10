@@ -21,10 +21,22 @@ export const WATTS_CURVE: ReadonlyArray<readonly [number, number]> = [
   [2200, 407], [2400, 494], [2500, 614], [2800, 802], [3000, 1007], [3200, 1234], [3450, 1487],
 ];
 
+/**
+ * Linear interpolation over a knot table.
+ *
+ * Below the first knot we taper linearly to the origin rather than clamping to
+ * the first value. Clamping meant any RPM under the first knot reported that
+ * knot's value — 700 RPM read as a full 22 GPM, and a barely-turning pump as
+ * 90 W. Both flow and power genuinely fall towards zero with speed, so the
+ * taper is far closer to the truth. (It slightly overestimates near the pump's
+ * minimum speed, where real flow hits zero before RPM does, but the pump spends
+ * almost no time there — only during ramps.)
+ */
 function interpolate(table: ReadonlyArray<readonly [number, number]>, x: number): number {
   const first = table[0]!;
   const last = table[table.length - 1]!;
-  if (x <= first[0]) return first[1];
+  if (x <= 0) return 0;
+  if (x <= first[0]) return first[1] * (x / first[0]);
   if (x >= last[0]) return last[1];
   for (let i = 1; i < table.length; i++) {
     const [x0, y0] = table[i - 1]!;
