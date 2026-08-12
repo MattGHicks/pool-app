@@ -1,13 +1,17 @@
-# poolbridge.yaml — ESP32 transparent RS-485 <-> TCP bridge for nodejs-poolController
+# poolbridge.yaml — ESP32 transparent RS-485 <-> TCP bridge for PoolPilot
 #
-# Bridges the Pentair SuperFlo VST RS-485 bus (9600 8N1) over WiFi so njsPC (on the T630)
-# can reach it via POOL_NET_CONNECT / POOL_NET_HOST / POOL_NET_PORT.
+# Bridges the Pentair SuperFlo VST RS-485 bus (9600 8N1) over WiFi so pool-api (on the T630)
+# can reach it. njsPC was retired at the PoolPilot cutover; pool-guardian now holds the
+# single persistent TCP connection to this bridge on :8899 and relays for pool-api.
 #
 # Uses the oxan/esphome-stream-server external component. VERIFY the current option names
 # against its README before flashing — the component's schema occasionally changes:
 #   https://github.com/oxan/esphome-stream-server
 #
 # Flash:  cp secrets.yaml.example secrets.yaml  (edit it)  &&  esphome run poolbridge.yaml
+#         OTA is enabled and port 3232 is reachable, so this flashes over WiFi — no USB
+#         cable and no trip to the pad needed. Do it while the pump is off (after 18:00 ET):
+#         the reboot drops the bridge for ~30s.
 
 esphome:
   name: poolbridge
@@ -24,7 +28,15 @@ esp32:
 wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_password
-  # Fixed IP so njsPC always finds the bridge. Pick a free address on the LAN at the pad,
+  # THE LATENCY FIX. ESPHome defaults ESP32 wifi to power_save_mode: LIGHT, which sleeps
+  # the radio between AP beacons — inbound packets sit queued at the router until it wakes.
+  # For a latency-sensitive transparent serial bridge that is the wrong trade: measured from
+  # the T630 on 2026-08-11 it produced 13.3% packet loss and 11ms/250ms/1562ms min/avg/max
+  # RTT to a device on the same LAN. Those stalls are what let the pump's ~15s keep-alive
+  # window lapse, so it reverted to its onboard schedule and audibly ramped down.
+  # 'none' keeps the radio awake; costs a little power, which is irrelevant on mains.
+  power_save_mode: none
+  # Fixed IP so pool-api always finds the bridge. Pick a free address on the LAN at the pad,
   # or set a DHCP reservation instead and delete this block.
   manual_ip:
     static_ip: 192.168.4.60
@@ -36,10 +48,14 @@ wifi:
     password: !secret ap_password
 
 # Logger runs on UART0 (the USB pins GPIO1/3). The RS-485 UART below is on
-# GPIO16/17 (UART2), so they do NOT conflict — keep USB logs for debugging.
+# GPIO25/26, so they do NOT conflict — keep USB logs for debugging.
 # (If you ever want it silent, set: baud_rate: 0)
+#
+# INFO, not DEBUG: at DEBUG this logs every frame on a 9600-baud bus that carries
+# ~1 poll/second, and formatting those strings competes with the stream server for
+# the single main loop. Raise it temporarily if you need to debug the bus.
 logger:
-  level: DEBUG
+  level: INFO
   hardware_uart: UART0
 
 api:
@@ -56,27 +72,22 @@ ota:
 uart:
   id: uart_bus
   tx_pin: GPIO25   # -> DI  (driver input) on the MAX485. Moved off GPIO16/17 (dead on this board).
-  rx_pin: GPIO26   # <- RO  (receiver output) on the MAX485. Unused for now (RO left unwired).
+  rx_pin: GPIO26   # <- RO  (receiver output) on the MAX485. WIRED — this is how telemetry gets back.
   baud_rate: 9600
   # Blue MAX485 module (explicit DE/RE). ESPHome drives DE high during TX via this pin;
-  # RE is tied to GND on the board (receiver always enabled, harmless since RO is unwired).
+  # RE is tied to GND on the board, so the receiver is always enabled.
   flow_control_pin: GPIO27   # -> DE (transmit-enable). THE FIX vs the old auto-direction module.
-  # TEMP DEBUG: log every byte the UART sends/receives, to verify the bridge forwards.
-  debug:
-    direction: BOTH
-    dummy_receiver: false
-    after:
-      bytes: 64
-      timeout: 40ms
-    sequence:
-      - lambda: UARTDebug::log_hex(direction, bytes, ',');
+  # NOTE: the byte-level `debug:` block that used to live here (direction: BOTH, log_hex every
+  # 64 bytes / 40ms) was removed 2026-08-11. It was marked TEMP DEBUG and left on in production,
+  # where it formatted and emitted a log line for every chunk on the bus — over USB *and* the
+  # API — starving the stream server's main loop. Re-add it only for short debugging sessions.
 
 external_components:
   - source: github://oxan/esphome-stream-server
     components: [stream_server]
 
 # ---------------------------------------------------------------------------
-# Expose the UART over TCP for njsPC. Port must match POOL_NET_PORT in docker-compose.yml.
+# Expose the UART over TCP. Port must match UPSTREAM_PORT in pool-app's docker-compose.guardian.yml.
 # ---------------------------------------------------------------------------
 stream_server:
   uart_id: uart_bus
