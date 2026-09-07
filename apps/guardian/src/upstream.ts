@@ -33,6 +33,8 @@ export class UpstreamClient implements Upstream {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private connectTimer: ReturnType<typeof setTimeout> | null = null;
   private idleTimer: ReturnType<typeof setInterval> | null = null;
+  /** Set by checkIdle so scheduleReconnect skips the backoff delay. */
+  private stallTriggered = false;
 
   private readonly idleTimeoutMs: number;
   private readonly connectTimeoutMs: number;
@@ -119,6 +121,7 @@ export class UpstreamClient implements Upstream {
     const idleMs = Date.now() - this.lastRxAt;
     if (idleMs < this.idleTimeoutMs) return;
     logger.warn({ idleMs, idleTimeoutMs: this.idleTimeoutMs }, "upstream stalled — forcing reconnect");
+    this.stallTriggered = true; // tell scheduleReconnect to skip the backoff delay
     this.socket?.destroy(); // 'close' schedules the reconnect
   }
 
@@ -146,6 +149,14 @@ export class UpstreamClient implements Upstream {
 
   private scheduleReconnect(): void {
     if (this.reconnectTimer || this.closing) return;
+    // After a stall, every second counts inside the pump's revert window — skip
+    // the backoff entirely and dial again immediately.
+    if (this.stallTriggered) {
+      this.stallTriggered = false;
+      this.reconnectAttempt = 0;
+      if (!this.closing) this.open();
+      return;
+    }
     const idx = Math.min(this.reconnectAttempt, RECONNECT_DELAYS.length - 1);
     const base = RECONNECT_DELAYS[idx] ?? 5000;
     const delay = base + Math.floor(base * 0.2 * Math.random());

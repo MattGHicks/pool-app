@@ -24,9 +24,13 @@ const EnvSchema = z.object({
   // TCP level, so "connected" is not evidence that commands are reaching the pump:
   // without this the pump can sit unattended past its ~3·KEEP_ALIVE_MS revert
   // window and drop to its onboard schedule with nothing logged anywhere.
-  // Chosen above the routine multi-second read gaps this link shows (checksum-
-  // rejected frames) but inside the revert window. Raise it if reconnects get
-  // chatty; lower it to react faster.
+  // Chosen above the routine multi-second read gaps this link shows and inside the
+  // ~15 s revert window (3·KEEP_ALIVE_MS). Do NOT tighten this on the assumption that
+  // WiFi power save is off: the firmware deliberately runs power_save_mode: light
+  // (pool-controller/firmware/poolbridge.yaml). The 2026-08-13 measurements found
+  // power_save_mode: none made telemetry gaps >15 s about 6x WORSE (20.8/hr vs 3.3/hr
+  // with the pump off), so multi-second gaps here are normal and 8 s would trip on
+  // them. Raise it if reconnects get chatty; lower it only with fresh gap data.
   BRIDGE_IDLE_MS: z.coerce.number().int().min(2000).default(12_000),
   BRIDGE_CONNECT_TIMEOUT_MS: z.coerce.number().int().min(1000).default(8000),
   BRIDGE_WRITE_TIMEOUT_MS: z.coerce.number().int().min(500).default(3000),

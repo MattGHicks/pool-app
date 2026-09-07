@@ -21,6 +21,14 @@ esp32:
   board: esp32dev
   framework:
     type: esp-idf   # stream_server needs the ESP-IDF UART (IDFUARTComponent); arduino won't link
+    # Added 2026-08-19 (experiment queue Step 3). The device asks for both of these on every
+    # boot: "Bootloader supports SRAM1 as IRAM (+40KB)" and "Chip rev >= 3.0 detected".
+    # +40KB IRAM lets more hot code run from fast internal RAM instead of being fetched from
+    # flash, which should cut main-loop latency — the resource the stream server is starved of.
+    # See EXPERIMENT-QUEUE.md.
+    advanced:
+      sram1_as_iram: true
+      minimum_chip_revision: "3.1"
 
 # ---------------------------------------------------------------------------
 # Connectivity
@@ -28,14 +36,25 @@ esp32:
 wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_password
-  # THE LATENCY FIX. ESPHome defaults ESP32 wifi to power_save_mode: LIGHT, which sleeps
-  # the radio between AP beacons — inbound packets sit queued at the router until it wakes.
-  # For a latency-sensitive transparent serial bridge that is the wrong trade: measured from
-  # the T630 on 2026-08-11 it produced 13.3% packet loss and 11ms/250ms/1562ms min/avg/max
-  # RTT to a device on the same LAN. Those stalls are what let the pump's ~15s keep-alive
-  # window lapse, so it reverted to its onboard schedule and audibly ramped down.
-  # 'none' keeps the radio awake; costs a little power, which is irrelevant on mains.
-  power_save_mode: none
+  # KEEP THIS AT 'light' (the ESPHome ESP32 default). Do not set 'none'.
+  #
+  # 2026-08-13 we set power_save_mode: none to cut idle latency, and it did — ping while
+  # the pump was off went from ~124ms avg to ~12ms. But it made the thing we actually care
+  # about ~6x WORSE. Telemetry gaps >15s, normalised per hour of exposure:
+  #
+  #                 pump off   1500 rpm   2400 rpm
+  #   power=light      3.3/hr    5.1/hr     6.0/hr
+  #   power=none      20.8/hr   31.5/hr        —
+  #
+  # and audible pump dips went from 0/day to 3 in one morning.
+  #
+  # Why: with the radio never sleeping, the WiFi task processes every frame on a busy
+  # 2.4GHz channel (including the broadcast management traffic that showed up as bursts
+  # of "Invalid MMIE" in the device log). That starves the main loop, which is where the
+  # stream server relays RS-485 bytes. ICMP still answers fast because it is handled in
+  # the network task — which is exactly why ping looked perfect while telemetry starved.
+  # Ping the device and you measure the wrong layer.
+  power_save_mode: light
   # Fixed IP so pool-api always finds the bridge. Pick a free address on the LAN at the pad,
   # or set a DHCP reservation instead and delete this block.
   manual_ip:
@@ -74,6 +93,11 @@ uart:
   tx_pin: GPIO25   # -> DI  (driver input) on the MAX485. Moved off GPIO16/17 (dead on this board).
   rx_pin: GPIO26   # <- RO  (receiver output) on the MAX485. WIRED — this is how telemetry gets back.
   baud_rate: 9600
+  # Enlarged from the 256-byte default 2026-08-17 (experiment queue Step 2). The gaps we're
+  # chasing are missing *telemetry* — dropped RS-485 replies. If the main loop is ever late
+  # draining the UART, a bigger buffer absorbs the overrun instead of losing the frame.
+  # Costs 256 bytes of RAM (~25% used). See EXPERIMENT-QUEUE.md.
+  rx_buffer_size: 512
   # Blue MAX485 module (explicit DE/RE). ESPHome drives DE high during TX via this pin;
   # RE is tied to GND on the board, so the receiver is always enabled.
   flow_control_pin: GPIO27   # -> DE (transmit-enable). THE FIX vs the old auto-direction module.
@@ -83,7 +107,15 @@ uart:
   # API — starving the stream server's main loop. Re-add it only for short debugging sessions.
 
 external_components:
-  - source: github://oxan/esphome-stream-server
+  # LOCAL FORK — patched 2026-09-04. Do not revert to the github source without carrying the
+  # patches forward; upstream leaks a client socket on any errno other than ECONNRESET, which
+  # exhausts CONFIG_LWIP_MAX_SOCKETS (10) and makes the device refuse connections on every
+  # listener while still answering ICMP. That is the confirmed cause of the pump dips.
+  # Fixes: reap the client on unhandled errno in flush() and write(); correct the
+  # std::string{N,0} identifier constructor. See INVESTIGATION-2026-08-31.md.
+  - source:
+      type: local
+      path: components
     components: [stream_server]
 
 # ---------------------------------------------------------------------------
@@ -93,8 +125,20 @@ stream_server:
   uart_id: uart_bus
   port: 8899
 
-# Optional heartbeat in the ESPHome/HA view (safe to delete if the schema differs).
-# binary_sensor:
-#   - platform: stream_server
-#     connected:
-#       name: "Pool bridge client connected"
+# ---------------------------------------------------------------------------
+# Instrumentation — added 2026-09-04 alongside the socket-leak fix.
+# ---------------------------------------------------------------------------
+# connection_count is the sensor that settles the leak outright. There should be exactly ONE
+# client (pool-guardian). If this climbs and never falls, sockets are leaking; when it pins at
+# CONFIG_LWIP_MAX_SOCKETS the device refuses connections on every listener while still answering
+# ICMP — which is exactly what was observed 2026-08-29 → 09-04. Watch it with:
+#   esphome logs poolbridge.yaml --device 192.168.4.60
+sensor:
+  - platform: stream_server
+    connection_count:
+      name: "Bridge client count"
+
+binary_sensor:
+  - platform: stream_server
+    connected:
+      name: "Pool bridge client connected"
