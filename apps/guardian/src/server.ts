@@ -27,6 +27,16 @@ function main(): void {
     // Pump → app: only meaningful while an app is connected; otherwise discard.
     if (client) client.write(chunk);
   };
+  // When the ESP32 link drops (stall or clean close), tear down the app connection
+  // so pool-api gets an immediate signal. Without this, pool-api sits on a stale
+  // guardian connection running its own idle timer — a cascading timeout that can
+  // exceed the pump's ~15 s revert window (12 s guardian + 12 s api = 24 s silence).
+  upstream.onDisconnected = () => {
+    if (client) {
+      logger.warn({}, "upstream lost — closing app connection so pool-api re-syncs immediately");
+      client.destroy();
+    }
+  };
   upstream.start();
 
   const server = net.createServer((sock) => {

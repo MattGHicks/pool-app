@@ -38,7 +38,10 @@ services:
       # socket open, so without this the pump can lose its keep-alive for minutes and
       # revert to its onboard schedule (audible ramp down/up) with nothing logged.
       # 12 s sits above this link's routine multi-second read gaps and inside the
-      # pump's ~3·KEEP_ALIVE_MS revert window. Raise if reconnects get chatty.
+      # pump's ~3·KEEP_ALIVE_MS revert window. The firmware runs power_save_mode:
+      # light on purpose (none measured ~6x worse on 2026-08-13), so those gaps are
+      # expected — don't tighten this without fresh gap data. Raise if reconnects
+      # get chatty.
       BRIDGE_IDLE_MS: ${BRIDGE_IDLE_MS:-12000}
       BRIDGE_CONNECT_TIMEOUT_MS: ${BRIDGE_CONNECT_TIMEOUT_MS:-8000}
       BRIDGE_WRITE_TIMEOUT_MS: ${BRIDGE_WRITE_TIMEOUT_MS:-3000}

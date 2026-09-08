@@ -57,6 +57,8 @@ export class BridgeConnection {
   private idleTimer: ReturnType<typeof setInterval> | null = null;
   private closing = false;
   private _connected = false;
+  /** Set by checkIdle so scheduleReconnect skips the backoff delay. */
+  private stallTriggered = false;
 
   private readonly idleTimeoutMs: number;
   private readonly connectTimeoutMs: number;
@@ -165,6 +167,7 @@ export class BridgeConnection {
     if (idleMs < this.idleTimeoutMs) return;
     logger.warn({ idleMs, idleTimeoutMs: this.idleTimeoutMs }, "bridge stalled — forcing reconnect");
     for (const cb of this.stallCbs) cb(idleMs);
+    this.stallTriggered = true; // tell scheduleReconnect to skip the backoff delay
     this.socket?.destroy(); // 'close' schedules the reconnect
   }
 
@@ -209,6 +212,14 @@ export class BridgeConnection {
 
   private scheduleReconnect(): void {
     if (this.reconnectTimer || this.closing) return;
+    // After a stall, every second counts inside the pump's revert window — skip
+    // the backoff entirely and dial again immediately.
+    if (this.stallTriggered) {
+      this.stallTriggered = false;
+      this.reconnectAttempt = 0;
+      if (!this.closing) this.open();
+      return;
+    }
     const idx = Math.min(this.reconnectAttempt, RECONNECT_DELAYS.length - 1);
     const base = RECONNECT_DELAYS[idx]!;
     const delay = base + Math.floor(base * 0.2 * Math.random());
