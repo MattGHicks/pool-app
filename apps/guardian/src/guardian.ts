@@ -136,6 +136,10 @@ export class Guardian {
   }
 
   private startFailover(): void {
+    // Never stack intervals: a second start without an intervening stop would
+    // orphan the previous timer, which then writes to the bus forever with no
+    // handle left to clear it — two writers on a half-duplex bus.
+    this.stopFailover();
     this._state = "holding";
     this.failoverDeadline = Date.now() + this.cfg.failoverMaxMs;
     this.log("app gone mid-run — holding pump speed", {

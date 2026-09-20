@@ -4,6 +4,9 @@ import { logger } from "./logger.js";
 import { Guardian } from "./guardian.js";
 import { UpstreamClient } from "./upstream.js";
 
+/** How long the ESP32 link must stay down before we disturb pool-api. */
+const UPSTREAM_LOST_GRACE_MS = 1500;
+
 function main(): void {
   const upstream = new UpstreamClient(config.UPSTREAM_HOST, config.UPSTREAM_PORT, {
     idleTimeoutMs: config.UPSTREAM_IDLE_MS,
@@ -27,15 +30,39 @@ function main(): void {
     // Pump → app: only meaningful while an app is connected; otherwise discard.
     if (client) client.write(chunk);
   };
-  // When the ESP32 link drops (stall or clean close), tear down the app connection
-  // so pool-api gets an immediate signal. Without this, pool-api sits on a stale
-  // guardian connection running its own idle timer — a cascading timeout that can
-  // exceed the pump's ~15 s revert window (12 s guardian + 12 s api = 24 s silence).
-  upstream.onDisconnected = () => {
-    if (client) {
-      logger.warn({}, "upstream lost — closing app connection so pool-api re-syncs immediately");
-      client.destroy();
+  // When the ESP32 link stays down, tear down the app connection so pool-api gets
+  // an immediate signal. Without this, pool-api sits on a stale guardian connection
+  // running its own idle timer — a cascading timeout that can exceed the pump's
+  // ~15 s revert window (12 s guardian + 12 s api = 24 s silence).
+  //
+  // But only when it STAYS down. This link drops and re-dials constantly (measured
+  // reconnects land in 70-500 ms), and cutting pool-api on every one of those blips
+  // tripled the system's connection churn the day it shipped — drops went from ~800
+  // to ~2,445/day with stalls flat — for no benefit: the upstream is back long
+  // before pool-api could have noticed anything. Waiting out a short grace period
+  // keeps the cascading-timeout fix for real outages and drops the churn for blips.
+  // The grace must stay well inside the revert window: 12 s detect + 1.5 s grace
+  // still has pool-api reconnected and re-asserting around 14 s.
+  let upstreamLostTimer: ReturnType<typeof setTimeout> | null = null;
+  const clearUpstreamLostTimer = (): void => {
+    if (upstreamLostTimer) {
+      clearTimeout(upstreamLostTimer);
+      upstreamLostTimer = null;
     }
+  };
+  upstream.onConnected = () => clearUpstreamLostTimer();
+  upstream.onDisconnected = () => {
+    if (upstreamLostTimer) return; // already counting down
+    upstreamLostTimer = setTimeout(() => {
+      upstreamLostTimer = null;
+      if (upstream.connected || !client) return; // came back, or nobody to tell
+      logger.warn(
+        { graceMs: UPSTREAM_LOST_GRACE_MS },
+        "upstream still down after grace — closing app connection so pool-api re-syncs",
+      );
+      client.destroy();
+    }, UPSTREAM_LOST_GRACE_MS);
+    upstreamLostTimer.unref?.();
   };
   upstream.start();
 
@@ -79,6 +106,7 @@ function main(): void {
     // Don't force a release: if we're mid-hold, dropping the keep-alive lets the
     // pump revert on its own timeout — and the app reconnecting elsewhere is rare.
     guardian.dispose();
+    clearUpstreamLostTimer();
     if (client) client.destroy();
     server.close();
     upstream.close();

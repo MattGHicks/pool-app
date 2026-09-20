@@ -7,6 +7,17 @@ const RECONNECT_DELAYS = [500, 1000, 2000, 3000, 5000];
 const IDLE_CHECK_MS = 1000;
 /** Don't log every dropped byte-chunk during an outage; one line per this window. */
 const DROP_LOG_INTERVAL_MS = 10_000;
+/**
+ * A bridge that accepts TCP but never relays a serial byte is not a blip: its
+ * RS-485 side is down (dead MAX485, disconnected bus, pump unpowered). Redialling
+ * every idleTimeoutMs then achieves nothing and actively harms recovery — each
+ * dial burns one of the ESP32's CONFIG_LWIP_MAX_SOCKETS (10) sockets, and once
+ * they're exhausted the device refuses connections on every listener while still
+ * answering ping. After this many consecutive connections that carried no bytes,
+ * back off hard and say plainly what is wrong.
+ */
+const SILENT_CYCLES_BEFORE_BACKOFF = 3;
+const SILENT_RECONNECT_MS = 30_000;
 
 export interface UpstreamOptions {
   /** Force a reconnect when the link goes quiet this long while still "connected". */
@@ -35,6 +46,10 @@ export class UpstreamClient implements Upstream {
   private idleTimer: ReturnType<typeof setInterval> | null = null;
   /** Set by checkIdle so scheduleReconnect skips the backoff delay. */
   private stallTriggered = false;
+  /** Has the CURRENT connection carried at least one byte? */
+  private rxSinceConnect = false;
+  /** Consecutive connections that stalled without ever carrying a byte. */
+  private silentCycles = 0;
 
   private readonly idleTimeoutMs: number;
   private readonly connectTimeoutMs: number;
@@ -99,12 +114,16 @@ export class UpstreamClient implements Upstream {
       this._connected = true;
       this.reconnectAttempt = 0;
       this.lastRxAt = Date.now();
+      this.rxSinceConnect = false;
       this.clearConnectTimer();
       logger.info({ host: this.host, port: this.port }, "upstream (ESP32) connected");
       this.onConnected?.();
     });
     socket.on("data", (chunk: Buffer) => {
       this.lastRxAt = Date.now();
+      // Bytes are flowing, so whatever was wrong with the serial side has cleared.
+      this.rxSinceConnect = true;
+      this.silentCycles = 0;
       this.onData?.(chunk);
     });
     socket.on("error", (err: Error) => logger.warn({ err: err.message }, "upstream socket error"));
@@ -120,6 +139,19 @@ export class UpstreamClient implements Upstream {
     if (!this._connected || this.closing || this.lastRxAt === 0) return;
     const idleMs = Date.now() - this.lastRxAt;
     if (idleMs < this.idleTimeoutMs) return;
+    if (this.rxSinceConnect) {
+      this.silentCycles = 0;
+    } else {
+      this.silentCycles += 1;
+      if (this.silentCycles === SILENT_CYCLES_BEFORE_BACKOFF) {
+        logger.error(
+          { silentCycles: this.silentCycles, backoffMs: SILENT_RECONNECT_MS },
+          "ESP32 accepts TCP but has relayed no RS-485 bytes across repeated connections — " +
+            "its serial side is down. Check the MAX485 wiring, the bus at the pad, and pump " +
+            "power. Backing off so we stop exhausting the bridge's socket table.",
+        );
+      }
+    }
     logger.warn({ idleMs, idleTimeoutMs: this.idleTimeoutMs }, "upstream stalled — forcing reconnect");
     this.stallTriggered = true; // tell scheduleReconnect to skip the backoff delay
     this.socket?.destroy(); // 'close' schedules the reconnect
@@ -149,11 +181,22 @@ export class UpstreamClient implements Upstream {
 
   private scheduleReconnect(): void {
     if (this.reconnectTimer || this.closing) return;
+    // A link that connects but never carries bytes needs the opposite of urgency:
+    // dialling it faster only exhausts the bridge's sockets and floods the log.
+    if (this.silentCycles >= SILENT_CYCLES_BEFORE_BACKOFF) {
+      this.stallTriggered = false;
+      this.reconnectTimer = setTimeout(() => {
+        this.reconnectTimer = null;
+        if (!this.closing) this.open();
+      }, SILENT_RECONNECT_MS);
+      this.reconnectTimer.unref?.();
+      return;
+    }
     // After a stall, every second counts inside the pump's revert window — skip
-    // the backoff entirely and dial again immediately.
+    // the backoff entirely and dial again immediately. (reconnectAttempt is
+    // already 0 here: onClose resets it whenever we were connected.)
     if (this.stallTriggered) {
       this.stallTriggered = false;
-      this.reconnectAttempt = 0;
       if (!this.closing) this.open();
       return;
     }

@@ -14,6 +14,15 @@ import { logger } from "../logger.js";
 const RECONNECT_DELAYS = [500, 1000, 2000, 3000, 5000];
 const MAX_RX_BUFFER = 4096;
 const IDLE_CHECK_MS = 1000;
+/**
+ * A bridge that accepts TCP but never delivers a frame is not a blip: the RS-485
+ * side is down. Redialling every idleTimeoutMs cannot fix that and makes recovery
+ * harder — each dial consumes one of the ESP32's 10 lwIP sockets, and an exhausted
+ * table makes it refuse connections outright while still answering ping. Back off
+ * after this many consecutive connections that carried nothing.
+ */
+const SILENT_CYCLES_BEFORE_BACKOFF = 3;
+const SILENT_RECONNECT_MS = 30_000;
 
 type StatusCb = (status: PumpStatus) => void;
 type FrameCb = (frame: RawFrame) => void;
@@ -59,6 +68,10 @@ export class BridgeConnection {
   private _connected = false;
   /** Set by checkIdle so scheduleReconnect skips the backoff delay. */
   private stallTriggered = false;
+  /** Has the CURRENT connection carried at least one byte? */
+  private rxSinceConnect = false;
+  /** Consecutive connections that stalled without ever carrying a byte. */
+  private silentCycles = 0;
 
   private readonly idleTimeoutMs: number;
   private readonly connectTimeoutMs: number;
@@ -146,6 +159,7 @@ export class BridgeConnection {
       // Start the idle clock now: without this the check would compare against a
       // stale (or zero) timestamp and fire immediately after connecting.
       this.lastRxAt = Date.now();
+      this.rxSinceConnect = false;
       this.clearConnectTimer();
       logger.info({ host: this.host, port: this.port }, "bridge connected");
       for (const cb of this.connectedCbs) cb();
@@ -165,6 +179,19 @@ export class BridgeConnection {
     if (!this._connected || this.closing || this.lastRxAt === 0) return;
     const idleMs = Date.now() - this.lastRxAt;
     if (idleMs < this.idleTimeoutMs) return;
+    if (this.rxSinceConnect) {
+      this.silentCycles = 0;
+    } else {
+      this.silentCycles += 1;
+      if (this.silentCycles === SILENT_CYCLES_BEFORE_BACKOFF) {
+        logger.error(
+          { silentCycles: this.silentCycles, backoffMs: SILENT_RECONNECT_MS },
+          "bridge accepts TCP but has delivered no pump frames across repeated connections — " +
+            "the RS-485 side is down. Check the MAX485 wiring, the bus at the pad, and pump " +
+            "power. Backing off so we stop exhausting the bridge's socket table.",
+        );
+      }
+    }
     logger.warn({ idleMs, idleTimeoutMs: this.idleTimeoutMs }, "bridge stalled — forcing reconnect");
     for (const cb of this.stallCbs) cb(idleMs);
     this.stallTriggered = true; // tell scheduleReconnect to skip the backoff delay
@@ -180,6 +207,9 @@ export class BridgeConnection {
 
   private onData(chunk: Buffer): void {
     this.lastRxAt = Date.now();
+    // Bytes are flowing, so whatever was wrong with the serial side has cleared.
+    this.rxSinceConnect = true;
+    this.silentCycles = 0;
     const merged = new Uint8Array(this.rxBuf.length + chunk.length);
     merged.set(this.rxBuf, 0);
     merged.set(chunk, this.rxBuf.length);
@@ -212,11 +242,22 @@ export class BridgeConnection {
 
   private scheduleReconnect(): void {
     if (this.reconnectTimer || this.closing) return;
+    // A link that connects but never carries frames needs the opposite of urgency:
+    // dialling it faster only exhausts the bridge's sockets and floods the log.
+    if (this.silentCycles >= SILENT_CYCLES_BEFORE_BACKOFF) {
+      this.stallTriggered = false;
+      this.reconnectTimer = setTimeout(() => {
+        this.reconnectTimer = null;
+        if (!this.closing) this.open();
+      }, SILENT_RECONNECT_MS);
+      this.reconnectTimer.unref?.();
+      return;
+    }
     // After a stall, every second counts inside the pump's revert window — skip
-    // the backoff entirely and dial again immediately.
+    // the backoff entirely and dial again immediately. (reconnectAttempt is
+    // already 0 here: onClose resets it whenever we were connected.)
     if (this.stallTriggered) {
       this.stallTriggered = false;
-      this.reconnectAttempt = 0;
       if (!this.closing) this.open();
       return;
     }
